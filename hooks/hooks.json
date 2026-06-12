@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/overlay.py\" --hook",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -334,13 +334,19 @@ def render_html(stats: dict) -> str:
 
 
 def render_export_html(stats: dict, variant: str) -> str:
-    """A single card on a transparent page, for headless screenshotting."""
+    """A single card on a transparent page, for headless screenshotting.
+
+    The card panel (background/border) is stripped so the PNG is fully
+    transparent — just the wordmark, route line, and metrics, ready to
+    overlay on a photo.
+    """
     return f"""<!doctype html>
 <html>
 <head>{HEAD}
 <style>
   body {{ background: transparent; width: 100vw; height: 100vh;
          display: flex; align-items: center; justify-content: center; }}
+  .card {{ background: transparent; border: none; }}
 </style>
 </head>
 <body>{card_html(stats, variant)}</body>
@@ -426,6 +432,104 @@ def export_pngs(stats: dict) -> list[Path]:
 
 
 # --------------------------------------------------------------------------
+# Local share server (QR links to your card over Wi-Fi — no backend needed)
+# --------------------------------------------------------------------------
+
+SHARE_TTL_SECS = 300  # server self-terminates after 5 minutes
+
+
+def lan_ip() -> str:
+    import socket
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # No packets are sent; this just selects the outbound interface.
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"
+    finally:
+        s.close()
+
+
+def share_page_html(sid8: str, variants: list[str]) -> str:
+    imgs = "\n".join(
+        f'<img src="/overlay-{sid8}-{v}.png" alt="{v} card">' for v in variants
+    )
+    return f"""<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Overlay — session {sid8}</title>
+<style>
+  body {{ margin: 0; background: #141210; color: #C9C2B8;
+         font: 14px/1.5 -apple-system, system-ui, sans-serif;
+         display: flex; flex-direction: column; align-items: center;
+         gap: 20px; padding: 28px 16px 48px; }}
+  img {{ max-width: min(92vw, 420px); height: auto; display: block; }}
+  p {{ margin: 0; opacity: .7; }}
+</style>
+</head><body>
+{imgs}
+<p>Press and hold an image to save it.</p>
+</body></html>"""
+
+
+def run_share_server(sid8: str, port: int) -> int:
+    """Internal mode: serve the share page + PNGs from OUT_DIR, then exit."""
+    import http.server
+    import os
+    import threading
+
+    variants = [
+        v for v in EXPORT_GEOMETRY
+        if (OUT_DIR / f"overlay-{sid8}-{v}.png").is_file()
+    ]
+    page = share_page_html(sid8, variants).encode()
+
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        def __init__(self, *a, **kw):
+            super().__init__(*a, directory=str(OUT_DIR), **kw)
+
+        def do_GET(self):
+            if self.path in ("/", f"/s/{sid8}"):
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(page)))
+                self.end_headers()
+                self.wfile.write(page)
+            else:
+                super().do_GET()
+
+        def log_message(self, *a):
+            pass
+
+    threading.Timer(SHARE_TTL_SECS, lambda: os._exit(0)).start()
+    with http.server.ThreadingHTTPServer(("", port), Handler) as srv:
+        srv.serve_forever()
+    return 0
+
+
+def start_share_server(sid8: str) -> str | None:
+    """Spawn a detached copy of this script in serve mode; return the URL."""
+    import socket
+    import subprocess
+
+    with socket.socket() as s:
+        s.bind(("", 0))
+        port = s.getsockname()[1]
+
+    subprocess.Popen(
+        [sys.executable, str(Path(__file__).resolve()),
+         "--serve", sid8, "--serve-port", str(port)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    return f"http://{lan_ip()}:{port}/s/{sid8}"
+
+
+# --------------------------------------------------------------------------
 # Terminal QR code (for scanning the share link from a phone)
 # --------------------------------------------------------------------------
 
@@ -450,6 +554,56 @@ def print_qr(url: str) -> None:
 
 
 # --------------------------------------------------------------------------
+# Hook mode (Claude Code SessionEnd — token-free automatic generation)
+# --------------------------------------------------------------------------
+
+def run_hook() -> int:
+    """Generate the card for the session described by the hook JSON on stdin.
+
+    Hooks fire on every session end, so this must be quiet and never block
+    or fail loudly: any problem (no transcript, no Chrome, etc.) exits 0.
+    """
+    try:
+        payload = json.load(sys.stdin)
+    except (json.JSONDecodeError, OSError, ValueError):
+        payload = {}
+
+    try:
+        tp = payload.get("transcript_path")
+        if tp and Path(tp).is_file():
+            path = Path(tp)
+        else:
+            transcripts = find_transcripts()
+            if not transcripts:
+                return 0
+            sid = payload.get("session_id") or ""
+            matches = [p for p in transcripts if p.stem.startswith(sid)]
+            path = matches[0] if matches else transcripts[0]
+
+        stats = apply_snapshot(parse_transcript(path))
+        if not stats["output_tokens"]:
+            return 0  # nothing worth a card (e.g. session opened and closed)
+
+        OUT_DIR.mkdir(parents=True, exist_ok=True)
+        out = OUT_DIR / f"overlay-{stats['session_id'][:8]}.html"
+        out.write_text(render_html(stats))
+        pngs = export_pngs(stats)
+
+        latest = OUT_DIR / "latest"
+        latest.mkdir(exist_ok=True)
+        for png in pngs:
+            variant = png.stem.rsplit("-", 1)[-1]
+            (latest / f"{variant}.png").write_bytes(png.read_bytes())
+
+        print(
+            f"claude-overlay: share card saved — {OUT_DIR}/latest/story.png"
+        )
+    except Exception:
+        pass
+    return 0
+
+
+# --------------------------------------------------------------------------
 # CLI
 # --------------------------------------------------------------------------
 
@@ -464,13 +618,26 @@ def main() -> int:
     ap.add_argument(
         "--qr",
         action="store_true",
-        help="print a scannable QR code for the share link",
+        help="print a QR code that opens the card on your phone (same Wi-Fi)",
     )
     ap.add_argument(
         "--share-url",
-        help="share URL to encode in the QR (defaults to a placeholder)",
+        help="custom URL to encode in the QR (skips the local share server)",
+    )
+    ap.add_argument("--serve", help=argparse.SUPPRESS)
+    ap.add_argument("--serve-port", type=int, help=argparse.SUPPRESS)
+    ap.add_argument(
+        "--hook",
+        action="store_true",
+        help="run as a Claude Code hook (reads hook JSON from stdin)",
     )
     args = ap.parse_args()
+
+    if args.serve:
+        return run_share_server(args.serve, args.serve_port)
+
+    if args.hook:
+        return run_hook()
 
     transcripts = find_transcripts()
     if not transcripts:
@@ -508,16 +675,26 @@ def main() -> int:
     )
     print(f"Overlay:  {out}")
 
-    if args.export:
-        for png in export_pngs(stats):
+    sid8 = stats["session_id"][:8]
+    exported = []
+    if args.export or args.qr:
+        # The QR share page serves the exported PNGs, so make sure they exist.
+        exported = export_pngs(stats)
+        for png in exported:
             print(f"PNG:      {png}")
 
     if args.qr:
-        # Placeholder until the hosted share page exists; --share-url overrides.
-        url = args.share_url or (
-            f"https://claude-overlay.app/s/{stats['session_id'][:8]}"
-        )
-        print_qr(url)
+        if args.share_url:
+            print_qr(args.share_url)
+        elif exported:
+            url = start_share_server(sid8)
+            print_qr(url)
+            print(
+                f"  Link serves your card on this Wi-Fi network for "
+                f"{SHARE_TTL_SECS // 60} minutes."
+            )
+        else:
+            print("QR skipped — PNG export failed.", file=sys.stderr)
 
     if not args.no_open:
         webbrowser.open(out.as_uri())

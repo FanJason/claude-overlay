@@ -24,14 +24,36 @@ Then, inside any session:
 ```
 
 Claude runs the generator for the current session, prints a scannable QR
-code for the share link right in the terminal, opens the story card, and
-lists the exported PNG paths.
+code right in the terminal, opens the story card, and lists the exported
+PNG paths. Scan the QR with your phone (same Wi-Fi network) to open the
+cards and save them to your camera roll — a temporary local server makes
+them available for 5 minutes, no upload involved.
 
 To test the plugin locally without a marketplace:
 
 ```bash
 claude --plugin-dir /path/to/claude-overlay
 ```
+
+### Automatic cards at session end (zero tokens)
+
+The plugin also ships a `SessionEnd` hook (`hooks/hooks.json`): every time a
+session ends, it regenerates the share card for that exact session — no
+model turn, no tokens, no interaction. The freshest cards are always at:
+
+```
+<plugin>/out/latest/story.png
+<plugin>/out/latest/strip.png
+```
+
+Everything runs locally: the hook reads the session transcript from
+`~/.claude/projects` and writes PNGs to the plugin's `out/` folder. Nothing
+leaves your machine. If the export can't run (e.g. no Chromium-based
+browser installed), the hook exits silently.
+
+Tip: when you've hit your rate limit and `/overlay` can't respond, your
+card is already waiting in `out/latest/`, or run the script directly —
+it costs zero tokens.
 
 ## Quick start (script, no plugin)
 
@@ -50,11 +72,13 @@ Other invocations:
 python3 overlay.py --list           # list recent sessions
 python3 overlay.py --session <id>   # render a specific session
 python3 overlay.py --no-open        # write the file, don't open it
-python3 overlay.py --qr             # print a scannable share QR in the terminal
+python3 overlay.py --qr             # QR that opens the cards on your phone
 ```
 
-`--qr` encodes a placeholder share URL for now (`claude-overlay.app/s/<id>`);
-pass `--share-url <url>` once the hosted share page exists.
+`--qr` exports the PNGs, starts a temporary local server (5 minutes, LAN
+only), and prints a QR code linking to a mobile share page — scan it with
+your phone on the same Wi-Fi to save the cards. Pass `--share-url <url>`
+to encode a custom link instead.
 
 ## Export share images
 
