@@ -23,10 +23,16 @@ Then, inside any session:
 /overlay
 ```
 
-Claude runs the generator for the current session and prints a scannable QR
-code in the terminal. Scan it with your phone (same Wi-Fi network) to open
-a share page with the story card — press and hold the image and tap Save to Photos. A temporary local server makes them available
-for 5 minutes, no upload involved. Nothing is opened automatically in the browser.
+Claude runs the generator for **today's activity** — every Claude Code session
+in the current day, summed — and prints a scannable QR code in the terminal.
+Scan it with your phone (same Wi-Fi network) to open a share page with the
+story card — press and hold the image and tap Save to Photos. A temporary local
+server makes it available for 5 minutes, no upload involved. Nothing is opened
+automatically in the browser.
+
+A "day" runs from **4am to 4am** local time, so a late-night session that
+crosses midnight still counts toward the day it started in. (Want a single
+session instead? `python3 overlay.py --session <id>`.)
 
 **`/overlay` uses zero model tokens.** A `UserPromptSubmit` hook intercepts
 the command before it reaches Claude, runs `overlay.py` locally, prints the

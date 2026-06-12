@@ -20,15 +20,28 @@ import json
 import math
 import sys
 import webbrowser
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 CLAUDE_PROJECTS = Path.home() / ".claude" / "projects"
 SNAPSHOT_DIR = Path.home() / ".claude-overlay" / "sessions"
 OUT_DIR = Path(__file__).parent / "out"
 
+# A "day" runs from 4am to 4am local time, so a late-night session that runs
+# past midnight still counts toward the day it started in.
+DAY_CUTOFF_HOUR = 4
+
+
+def day_start_ts(now: datetime | None = None) -> float:
+    """Epoch seconds of the most recent 4am local boundary."""
+    now = now or datetime.now().astimezone()
+    start = now.replace(hour=DAY_CUTOFF_HOUR, minute=0, second=0, microsecond=0)
+    if now < start:
+        start -= timedelta(days=1)
+    return start.timestamp()
+
 ACCENT = "#D97757"  # Claude terracotta
-ACCENT_LINE = "#FFB088"  # brighter terracotta for the route line
+ACCENT_LINE = "#FF8E5C"  # brighter, saturated terracotta for the route line
 
 
 # --------------------------------------------------------------------------
@@ -46,7 +59,9 @@ def parse_ts(s: str) -> float:
     return datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp()
 
 
-def parse_transcript(path: Path) -> dict:
+def parse_transcript(path: Path, since: float | None = None) -> dict:
+    """Parse one transcript. When `since` is set, events timestamped before it
+    are ignored — used to clip a session to the current 4am-to-4am day."""
     prompts = 0
     tool_calls = 0
     lines_added = 0
@@ -66,6 +81,8 @@ def parse_transcript(path: Path) -> dict:
 
         ts = o.get("timestamp")
         t = parse_ts(ts) if isinstance(ts, str) else None
+        if since is not None and t is not None and t < since:
+            continue
         if t:
             timestamps.append(t)
 
@@ -138,6 +155,73 @@ def parse_transcript(path: Path) -> dict:
         "route": route,
         "api_ms": api_ms,
         "wall_ms": (max(timestamps) - min(timestamps)) * 1000 if timestamps else 0,
+        "cost_usd": None,
+        "_requests": list(requests.values()),
+        "_ts_min": min(timestamps) if timestamps else None,
+        "_ts_max": max(timestamps) if timestamps else None,
+    }
+
+
+def parse_day(transcripts: list[Path], now: datetime | None = None) -> dict:
+    """Aggregate every session active in the current 4am-to-4am day into one
+    set of stats: summed lines/tokens/thinking-time and a route line that is
+    cumulative output tokens across the whole day, ordered by time."""
+    since = day_start_ts(now)
+    all_requests: list[dict] = []
+    lines_added = lines_removed = prompts = tool_calls = sessions = 0
+    models: dict[str, int] = {}
+    projects: set[str] = set()
+    ts_min: float | None = None
+    ts_max: float | None = None
+
+    for p in transcripts:
+        # mtime is the last write; if that predates the window the whole file
+        # is yesterday's and can be skipped without opening it.
+        if p.stat().st_mtime < since:
+            continue
+        s = parse_transcript(p, since=since)
+        reqs = s["_requests"]
+        contributed = bool(reqs) or s["lines_added"] or s["lines_removed"] \
+            or s["prompts"] or s["tool_calls"]
+        if not contributed:
+            continue
+        all_requests.extend(reqs)
+        lines_added += s["lines_added"]
+        lines_removed += s["lines_removed"]
+        prompts += s["prompts"]
+        tool_calls += s["tool_calls"]
+        for m, c in s["models"].items():
+            models[m] = models.get(m, 0) + c
+        projects.add(s["project"])
+        sessions += 1
+        if s["_ts_min"] is not None:
+            ts_min = s["_ts_min"] if ts_min is None else min(ts_min, s["_ts_min"])
+        if s["_ts_max"] is not None:
+            ts_max = s["_ts_max"] if ts_max is None else max(ts_max, s["_ts_max"])
+
+    ordered = sorted(all_requests, key=lambda r: r["last_ts"])
+    route: list[tuple[float, int]] = []
+    cum = 0
+    for r in ordered:
+        cum += r["out"]
+        route.append((r["last_ts"], cum))
+    api_ms = sum((r["last_ts"] - r["first_ts"]) * 1000 for r in ordered)
+
+    day = datetime.fromtimestamp(since)
+    return {
+        "session_id": day.strftime("%Y%m%d"),
+        "project": day.strftime("%b %d").replace(" 0", " "),
+        "sessions": sessions,
+        "project_count": len(projects),
+        "prompts": prompts,
+        "tool_calls": tool_calls,
+        "lines_added": lines_added,
+        "lines_removed": lines_removed,
+        "output_tokens": cum,
+        "models": models,
+        "route": route,
+        "api_ms": api_ms,
+        "wall_ms": (ts_max - ts_min) * 1000 if ts_min and ts_max else 0,
         "cost_usd": None,
     }
 
@@ -311,16 +395,16 @@ HEAD = f"""<meta charset="utf-8">
      a soft offset shadow for depth + a tight contact shadow for edge
      definition. Harmless on the dark preview page, essential on export. */
   .value, .label, .wordmark {{
-    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45), 0 0 2px rgba(0, 0, 0, 0.55);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28), 0 0 1px rgba(0, 0, 0, 0.30);
   }}
-  .story svg, .strip-top svg {{ filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.45)); }}
+  .story svg, .strip-top svg {{ filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.28)); }}
   .card {{
     background: var(--card); border: 1px solid var(--stroke); border-radius: 16px;
     display: flex; flex-direction: column; align-items: center;
   }}
   .story {{ width: 340px; padding: 32px 28px 36px; gap: 14px; }}
   .story-stats {{ display: flex; flex-direction: column; gap: 20px; align-items: center; width: 100%; }}
-  .story .stat {{ align-items: center; gap: 1px; }}
+  .story .stat {{ align-items: center; gap: 7px; }}
   .story .label {{ font-size: 13px; color: var(--fg); }}
   .story .value {{ font-size: 40px; }}
   .story .wordmark {{ font-size: 32px; }}
@@ -329,20 +413,21 @@ HEAD = f"""<meta charset="utf-8">
   .strip-top .wordmark {{ flex-shrink: 0; font-size: 32px; }}
   .strip-top .route-wrap {{ flex: 1; display: flex; justify-content: center; min-width: 0; }}
   .story svg, .strip-top svg {{ display: block; }}
+  .story svg {{ margin: 14px 0; }}
   .strip .stats-row {{ justify-content: center; margin-left: 0; width: 100%; }}
   .strip .stat {{ gap: 1px; }}
   .strip .value {{ font-size: 32px; }}
   .strip .label {{ font-size: 14px; }}
   .wordmark {{
     font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
-    font-size: 20px; font-weight: 700; letter-spacing: 0.12em;
+    font-size: 20px; font-weight: 700; letter-spacing: 0.06em;
     text-transform: uppercase;
   }}
   .stats-col {{ display: flex; flex-direction: column; gap: 20px; align-items: center; }}
   .stats-row {{ display: flex; gap: 28px; margin-left: auto; }}
   .stat {{ display: flex; flex-direction: column; gap: 0; white-space: nowrap; }}
-  .value {{ font-size: 24px; font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }}
-  .label {{ font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg); }}
+  .value {{ font-size: 24px; font-weight: 600; line-height: 1; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }}
+  .label {{ font-size: 10px; font-weight: 500; line-height: 1; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg); }}
 </style>"""
 
 
@@ -352,8 +437,8 @@ def card_html(stats: dict, variant: str) -> str:
     tokens = fmt_tokens(stats["output_tokens"])
     stats_html = (
         stat(lines, "Lines added", label_first=(variant == "story"))
-        + stat(thinking, "Thinking time", label_first=(variant == "story"))
         + stat(tokens, "Output tokens", label_first=(variant == "story"))
+        + stat(thinking, "Thinking time", label_first=(variant == "story"))
     )
     if variant == "story":
         return (
@@ -661,6 +746,11 @@ def share_page_html(sid8: str, variants: list[str]) -> str:
   .hint {{
     text-align: center; font-size: 13px; color: #FFFFFF;
   }}
+  .note {{
+    text-align: center; font-size: 12px; line-height: 1.45;
+    color: #B8B0A8; max-width: 320px;
+  }}
+  .note.wink {{ color: #8A827A; font-style: italic; }}
 </style>
 </head><body>
 <div class="page">
@@ -672,6 +762,7 @@ def share_page_html(sid8: str, variants: list[str]) -> str:
   <div class="footer">
     {dots_html}
     <p class="hint">Press and hold the image, then tap Save to Photos.</p>
+    <p class="note">These stats add up all your Claude Code sessions from today. Cutoff at 4 AM instead of 12 AM to account for peak developer time.</p>
   </div>
 </div>
 <script>
@@ -932,9 +1023,9 @@ def main() -> int:
         return print_rate_status()
 
     transcripts = find_transcripts()
+    # Nothing to evaluate on — do nothing, quietly.
     if not transcripts:
-        print("No Claude transcripts found in ~/.claude/projects", file=sys.stderr)
-        return 1
+        return 0
 
     if args.list:
         for p in transcripts[:15]:
@@ -943,42 +1034,36 @@ def main() -> int:
         return 0
 
     if args.session:
-        path, fallback_from = resolve_transcript(
+        # Single-session view, for inspecting one specific session.
+        path, _ = resolve_transcript(
             transcripts, session_id=args.session, allow_fallback=False
         )
         if not path:
             print(f"No transcript matching {args.session!r}", file=sys.stderr)
             return 1
+        stats = apply_snapshot(parse_transcript(path))
     else:
-        path, fallback_from = resolve_transcript(
-            transcripts,
-            session_id=None,
-            transcript_path=args.transcript_path,
-            allow_fallback=not args.no_fallback,
-        )
-        if not path:
-            print("No Claude transcripts found in ~/.claude/projects", file=sys.stderr)
-            return 1
+        # Default: aggregate every session in the current 4am-to-4am day.
+        stats = parse_day(transcripts)
 
-    stats = apply_snapshot(parse_transcript(path))
-
-    if args.quiet_if_empty and session_is_empty(stats):
+    # No activity in the window — nothing to show, so do nothing.
+    if session_is_empty(stats):
         return 0
-
-    if fallback_from:
-        print(
-            f"Note:     using {path.stem[:8]} — "
-            f"{fallback_from.stem[:8]} has no output yet "
-            f"(rate limit or new session)",
-            file=sys.stderr,
-        )
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out = OUT_DIR / f"overlay-{stats['session_id'][:8]}.html"
     out.write_text(render_html(stats))
 
-    print(f"Session:  {stats['session_id']}")
-    print(f"Project:  {stats['project']}")
+    if args.session:
+        print(f"Session:  {stats['session_id']}")
+        print(f"Project:  {stats['project']}")
+    else:
+        sess = stats["sessions"]
+        proj = stats["project_count"]
+        print(
+            f"Day:      {stats['project']} · {sess} session{'s' if sess != 1 else ''}"
+            f" across {proj} project{'s' if proj != 1 else ''} (since 4am)"
+        )
     print(
         f"Stats:    +{stats['lines_added']}/-{stats['lines_removed']} lines · "
         f"{fmt_tokens(stats['output_tokens'])} output tokens · "

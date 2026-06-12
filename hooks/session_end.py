@@ -48,16 +48,11 @@ def plugin_root() -> Path:
 
 
 def build_overlay_cmd(payload: dict) -> list[str]:
+    # The card aggregates every session in the current 4am-to-4am day, so the
+    # specific session that just ended doesn't need to be passed — the default
+    # (no --session) is the daily view, and it quietly no-ops on an empty day.
     overlay = plugin_root() / "overlay.py"
-    cmd = [sys.executable, str(overlay), "--qr", "--quiet-if-empty"]
-
-    tp = payload.get("transcript_path")
-    if isinstance(tp, str) and tp:
-        cmd.extend(["--transcript-path", tp])
-    elif payload.get("session_id"):
-        cmd.extend(["--session", str(payload["session_id"])[:8]])
-
-    return cmd
+    return [sys.executable, str(overlay), "--qr", "--quiet-if-empty"]
 
 
 def worker_source(cmd: list[str]) -> str:
