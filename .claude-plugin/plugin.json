@@ -1,0 +1,8 @@
+{
+  "name": "claude-overlay",
+  "description": "Strava-style share cards for your Claude Code sessions — /overlay renders a story card + footer strip with your session's route line, lines added, thinking time, and output tokens.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Jason Fan"
+  }
+}

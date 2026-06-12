@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Overlay — Strava-style share cards for Claude Code</title>
+<meta name="description" content="Turn your Claude Code sessions into shareable cards: the token route, lines added, thinking time. /overlay and go.">
+<meta property="og:title" content="Claude Overlay">
+<meta property="og:description" content="Strava-style share cards for Claude Code sessions.">
+<meta property="og:image" content="/demo/story.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700&family=Open+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --accent: #D97757; --fg: #E8E6E3; --fg-dim: #8A8782; --bg: #0F0E0D; --card: #171514; --stroke: #2A2724; }
+  * { margin: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font-family: "Open Sans", sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 72px 24px 96px; gap: 56px;
+  }
+  .wordmark {
+    font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+    font-size: 28px; font-weight: 700; letter-spacing: 0.24em;
+    text-transform: uppercase;
+  }
+  .wordmark span { color: var(--accent); }
+  .tagline { color: var(--fg-dim); font-size: 15px; max-width: 480px; text-align: center; line-height: 1.6; }
+  .hero { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .cards { display: flex; flex-direction: column; align-items: center; gap: 40px; }
+  .cards img { max-width: 100%; height: auto; }
+  .story-img { width: 340px; }
+  .strip-img { width: 620px; }
+  .install {
+    background: var(--card); border: 1px solid var(--stroke); border-radius: 12px;
+    padding: 20px 28px; font-family: ui-monospace, Menlo, monospace;
+    font-size: 13px; line-height: 2; color: var(--fg);
+  }
+  .install .c { color: var(--fg-dim); }
+  .label {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--fg-dim);
+  }
+  a { color: var(--accent); text-decoration: none; }
+  footer { color: var(--fg-dim); font-size: 13px; }
+</style>
+</head>
+<body>
+  <div class="hero">
+    <div class="wordmark">Claude <span>Overlay</span></div>
+    <p class="tagline">
+      Strava-style share cards for Claude Code sessions. The orange line is
+      your session's route — output tokens climbing while Claude works,
+      flat while you think. Type <strong>/overlay</strong> and share it.
+    </p>
+  </div>
+
+  <div class="cards">
+    <img class="story-img" src="/demo/story.png" alt="Story card: a 6-hour Claude session with +2,322 lines added, 43:20 thinking time, 199.7K output tokens">
+    <img class="strip-img" src="/demo/strip.png" alt="Footer strip variant of the same session card">
+  </div>
+
+  <div style="display:flex; flex-direction:column; gap:12px; align-items:center">
+    <div class="label">Install</div>
+    <div class="install">
+      <span class="c"># in Claude Code</span><br>
+      /plugin marketplace add FanJason/claude-overlay<br>
+      /plugin install claude-overlay<br>
+      <span class="c"># then, in any session</span><br>
+      /overlay
+    </div>
+  </div>
+
+  <footer>
+    <a href="https://github.com/FanJason/claude-overlay">GitHub</a>
+  </footer>
+</body>
+</html>

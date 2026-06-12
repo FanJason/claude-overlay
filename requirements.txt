@@ -1,0 +1,2 @@
+# Optional — only needed for terminal QR codes (--qr). Everything else is stdlib.
+qrcode>=7.0
