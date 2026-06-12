@@ -42,8 +42,15 @@ def main() -> int:
         return 0
 
     overlay = plugin_root() / "overlay.py"
+    cmd = [sys.executable, str(overlay), "--export", "--qr"]
+    tp = payload.get("transcript_path")
+    if isinstance(tp, str) and tp:
+        cmd.extend(["--transcript-path", tp])
+    elif payload.get("session_id"):
+        cmd.extend(["--session", str(payload["session_id"])[:8]])
+
     result = subprocess.run(
-        [sys.executable, str(overlay), "--export", "--qr"],
+        cmd,
         capture_output=True,
         text=True,
     )

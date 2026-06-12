@@ -168,6 +168,56 @@ def apply_snapshot(stats: dict) -> dict:
     return stats
 
 
+def session_is_empty(stats: dict) -> bool:
+    return stats["output_tokens"] == 0 and stats["lines_added"] == 0
+
+
+def resolve_transcript(
+    transcripts: list[Path],
+    *,
+    session_id: str | None = None,
+    transcript_path: str | None = None,
+    allow_fallback: bool = True,
+) -> tuple[Path | None, Path | None]:
+    """Pick a transcript path, optionally falling back to a richer sibling session.
+
+    Returns (chosen_path, fallback_from_path). fallback_from_path is set when
+    we substitute a prior session in the same project because the requested one
+    has no output yet (common when rate-limited).
+    """
+    path: Path | None = None
+    if transcript_path:
+        tp = Path(transcript_path)
+        if tp.is_file():
+            path = tp
+    elif session_id:
+        matches = [p for p in transcripts if p.stem.startswith(session_id)]
+        path = matches[0] if matches else None
+    elif transcripts:
+        path = transcripts[0]
+
+    if path is None:
+        return None, None
+
+    stats = apply_snapshot(parse_transcript(path))
+    if not allow_fallback or not session_is_empty(stats):
+        return path, None
+
+    siblings = sorted(
+        path.parent.glob("*.jsonl"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    for sib in siblings:
+        if sib == path:
+            continue
+        s = apply_snapshot(parse_transcript(sib))
+        if not session_is_empty(s):
+            return sib, path
+
+    return path, None
+
+
 # --------------------------------------------------------------------------
 # Formatting
 # --------------------------------------------------------------------------
@@ -635,6 +685,10 @@ def print_rate_status() -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--session", help="session id (transcript filename stem)")
+    ap.add_argument(
+        "--transcript-path",
+        help="exact transcript JSONL path (from Claude Code hook payload)",
+    )
     ap.add_argument("--list", action="store_true", help="list recent sessions")
     ap.add_argument("--no-open", action="store_true", help="don't open browser")
     ap.add_argument(
@@ -676,15 +730,32 @@ def main() -> int:
         return 0
 
     if args.session:
-        matches = [p for p in transcripts if p.stem.startswith(args.session)]
-        if not matches:
+        path, fallback_from = resolve_transcript(
+            transcripts, session_id=args.session, allow_fallback=False
+        )
+        if not path:
             print(f"No transcript matching {args.session!r}", file=sys.stderr)
             return 1
-        path = matches[0]
     else:
-        path = transcripts[0]
+        path, fallback_from = resolve_transcript(
+            transcripts,
+            session_id=None,
+            transcript_path=args.transcript_path,
+            allow_fallback=True,
+        )
+        if not path:
+            print("No Claude transcripts found in ~/.claude/projects", file=sys.stderr)
+            return 1
 
     stats = apply_snapshot(parse_transcript(path))
+
+    if fallback_from:
+        print(
+            f"Note:     using {path.stem[:8]} — "
+            f"{fallback_from.stem[:8]} has no output yet "
+            f"(rate limit or new session)",
+            file=sys.stderr,
+        )
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out = OUT_DIR / f"overlay-{stats['session_id'][:8]}.html"
