@@ -554,53 +554,78 @@ def print_qr(url: str) -> None:
 
 
 # --------------------------------------------------------------------------
-# Hook mode (Claude Code SessionEnd — token-free automatic generation)
+# Rate limit detection (from statusline snapshots — zero tokens)
 # --------------------------------------------------------------------------
 
-def run_hook() -> int:
-    """Generate the card for the session described by the hook JSON on stdin.
+def latest_statusline_snapshot() -> dict | None:
+    if not SNAPSHOT_DIR.is_dir():
+        return None
+    files = sorted(
+        SNAPSHOT_DIR.glob("*.ndjson"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    for path in files:
+        try:
+            lines = path.read_text().splitlines()
+            if not lines:
+                continue
+            return json.loads(lines[-1])
+        except (json.JSONDecodeError, OSError, IndexError):
+            continue
+    return None
 
-    Hooks fire on every session end, so this must be quiet and never block
-    or fail loudly: any problem (no transcript, no Chrome, etc.) exits 0.
-    """
-    try:
-        payload = json.load(sys.stdin)
-    except (json.JSONDecodeError, OSError, ValueError):
-        payload = {}
 
-    try:
-        tp = payload.get("transcript_path")
-        if tp and Path(tp).is_file():
-            path = Path(tp)
-        else:
-            transcripts = find_transcripts()
-            if not transcripts:
-                return 0
-            sid = payload.get("session_id") or ""
-            matches = [p for p in transcripts if p.stem.startswith(sid)]
-            path = matches[0] if matches else transcripts[0]
+def rate_limit_status() -> tuple[bool, list[str]]:
+    snap = latest_statusline_snapshot()
+    if not snap:
+        return False, []
+    limits = snap.get("rate_limits") or {}
+    hit = []
+    for name, info in limits.items():
+        if isinstance(info, dict) and info.get("used_percentage", 0) >= 100:
+            hit.append(name.replace("_", " "))
+    return bool(hit), hit
 
-        stats = apply_snapshot(parse_transcript(path))
-        if not stats["output_tokens"]:
-            return 0  # nothing worth a card (e.g. session opened and closed)
 
-        OUT_DIR.mkdir(parents=True, exist_ok=True)
-        out = OUT_DIR / f"overlay-{stats['session_id'][:8]}.html"
-        out.write_text(render_html(stats))
-        pngs = export_pngs(stats)
+def format_rate_reset() -> str:
+    snap = latest_statusline_snapshot()
+    if not snap:
+        return ""
+    limits = snap.get("rate_limits") or {}
+    resets = [
+        info["resets_at"]
+        for info in limits.values()
+        if isinstance(info, dict) and info.get("resets_at")
+    ]
+    if not resets:
+        return ""
+    ts = min(resets)
+    return datetime.fromtimestamp(ts).strftime("%-I:%M %p %Z").strip()
 
-        latest = OUT_DIR / "latest"
-        latest.mkdir(exist_ok=True)
-        for png in pngs:
-            variant = png.stem.rsplit("-", 1)[-1]
-            (latest / f"{variant}.png").write_bytes(png.read_bytes())
 
-        print(
-            f"claude-overlay: share card saved — {OUT_DIR}/latest/story.png"
-        )
-    except Exception:
-        pass
-    return 0
+def overlay_cli_command() -> str:
+    return f'python3 "{Path(__file__).resolve()}" --export --qr'
+
+
+def print_rate_status() -> int:
+    limited, windows = rate_limit_status()
+    if not limited:
+        print("OK: session usage limit not reached — /overlay should work.")
+        return 0
+
+    reset = format_rate_reset()
+    reset_line = f" Resets {reset}." if reset else ""
+    print(
+        "LIMIT REACHED: session usage limit hit"
+        f" ({', '.join(windows)}).{reset_line}\n"
+        "/overlay needs a model turn and will not work right now.\n\n"
+        "Run this instead (zero tokens):\n"
+        f"  {overlay_cli_command()}\n\n"
+        "Or in Claude Code bash mode:\n"
+        f"  !{overlay_cli_command()}"
+    )
+    return 1
 
 
 # --------------------------------------------------------------------------
@@ -627,17 +652,17 @@ def main() -> int:
     ap.add_argument("--serve", help=argparse.SUPPRESS)
     ap.add_argument("--serve-port", type=int, help=argparse.SUPPRESS)
     ap.add_argument(
-        "--hook",
+        "--rate-status",
         action="store_true",
-        help="run as a Claude Code hook (reads hook JSON from stdin)",
+        help="check session usage limit and print fallback command if hit",
     )
     args = ap.parse_args()
 
     if args.serve:
         return run_share_server(args.serve, args.serve_port)
 
-    if args.hook:
-        return run_hook()
+    if args.rate_status:
+        return print_rate_status()
 
     transcripts = find_transcripts()
     if not transcripts:

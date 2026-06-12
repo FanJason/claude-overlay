@@ -1,9 +1,16 @@
 ---
-description: Generate a share card for this session
+description: Generate share card (rate limited? run overlay.py --export --qr)
 allowed-tools: Bash(python3 *), Bash(open *)
 ---
 
-Generate the share overlay for the current session by running:
+First, check whether the session usage limit blocks this command:
+
+!`python3 "${CLAUDE_PLUGIN_ROOT}/overlay.py" --rate-status 2>&1`
+
+If the output above starts with `LIMIT REACHED`, show that message verbatim
+and stop — do not run anything else.
+
+Otherwise generate the share overlay for the current session:
 
 ```
 python3 "${CLAUDE_PLUGIN_ROOT}/overlay.py" --export --no-open --qr

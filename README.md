@@ -29,31 +29,23 @@ PNG paths. Scan the QR with your phone (same Wi-Fi network) to open the
 cards and save them to your camera roll — a temporary local server makes
 them available for 5 minutes, no upload involved.
 
+**Rate limited?** `/overlay` needs a model turn, so it won't run when
+you've hit your session limit. Run the script directly instead (zero
+tokens):
+
+```bash
+python3 overlay.py --export --qr
+```
+
+Or in Claude Code bash mode: `!python3 overlay.py --export --qr`
+
+Check limit status: `python3 overlay.py --rate-status`
+
 To test the plugin locally without a marketplace:
 
 ```bash
 claude --plugin-dir /path/to/claude-overlay
 ```
-
-### Automatic cards at session end (zero tokens)
-
-The plugin also ships a `SessionEnd` hook (`hooks/hooks.json`): every time a
-session ends, it regenerates the share card for that exact session — no
-model turn, no tokens, no interaction. The freshest cards are always at:
-
-```
-<plugin>/out/latest/story.png
-<plugin>/out/latest/strip.png
-```
-
-Everything runs locally: the hook reads the session transcript from
-`~/.claude/projects` and writes PNGs to the plugin's `out/` folder. Nothing
-leaves your machine. If the export can't run (e.g. no Chromium-based
-browser installed), the hook exits silently.
-
-Tip: when you've hit your rate limit and `/overlay` can't respond, your
-card is already waiting in `out/latest/`, or run the script directly —
-it costs zero tokens.
 
 ## Quick start (script, no plugin)
 
