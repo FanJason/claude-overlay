@@ -1,0 +1,25 @@
+{
+  "name": "claude-overlay",
+  "owner": {
+    "name": "Jason Fan",
+    "url": "https://github.com/FanJason"
+  },
+  "metadata": {
+    "description": "Strava-style share cards for Claude Code sessions",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "claude-overlay",
+      "source": "./",
+      "description": "Strava-style share cards for your Claude Code sessions — /overlay renders a story card + footer strip with your session's route line, lines added, thinking time, and output tokens.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Jason Fan"
+      },
+      "homepage": "https://claude-overlay.vercel.app",
+      "repository": "https://github.com/FanJason/claude-overlay",
+      "keywords": ["share", "stats", "overlay", "strava", "session"]
+    }
+  ]
+}
