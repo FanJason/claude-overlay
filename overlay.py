@@ -523,8 +523,7 @@ def share_page_html(sid8: str, variants: list[str]) -> str:
         f'<div class="preview-card preview-card--{v}">'
         f'<a class="preview-save" href="/overlay-{sid8}-{v}.png">'
         f'<img src="/overlay-{sid8}-{v}.png" alt="{labels.get(v, v)}" '
-        f'draggable="false"></a></div>'
-        f'<p class="caption">{labels.get(v, v)}</p></div>'
+        f'draggable="false"></a></div></div>'
         for v in ordered
     )
     dots = "\n".join(
@@ -595,10 +594,6 @@ def share_page_html(sid8: str, variants: list[str]) -> str:
   .preview-save img {{
     position: relative; z-index: 1;
     width: 100%; height: auto; display: block;
-  }}
-  .caption {{
-    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: #8A8782;
   }}
   .dots {{
     display: flex; justify-content: center; gap: 8px;
