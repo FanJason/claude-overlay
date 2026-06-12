@@ -28,7 +28,7 @@ SNAPSHOT_DIR = Path.home() / ".claude-overlay" / "sessions"
 OUT_DIR = Path(__file__).parent / "out"
 
 ACCENT = "#D97757"  # Claude terracotta
-ACCENT_LINE = "#EA9A76"  # slightly brighter for the route line
+ACCENT_LINE = "#FFB088"  # brighter terracotta for the route line
 
 
 # --------------------------------------------------------------------------
@@ -307,6 +307,13 @@ HEAD = f"""<meta charset="utf-8">
   :root {{ --accent: {ACCENT}; --fg: #FFFFFF; --fg-dim: #FFFFFF; --bg: #0F0E0D; --card: #171514; --stroke: #2A2724; }}
   * {{ margin: 0; box-sizing: border-box; }}
   body {{ color: var(--fg); font-family: "Open Sans", sans-serif; }}
+  /* Lift text/line off arbitrary photo backgrounds (Strava-style):
+     a soft offset shadow for depth + a tight contact shadow for edge
+     definition. Harmless on the dark preview page, essential on export. */
+  .value, .label, .wordmark {{
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45), 0 0 2px rgba(0, 0, 0, 0.55);
+  }}
+  .story svg, .strip-top svg {{ filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.45)); }}
   .card {{
     background: var(--card); border: 1px solid var(--stroke); border-radius: 16px;
     display: flex; flex-direction: column; align-items: center;
