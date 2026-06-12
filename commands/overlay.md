@@ -21,7 +21,7 @@ Then:
 1. Show the QR code from the script output verbatim, inside a fenced code
    block so the alignment is preserved.
 2. Reply with a one-line summary of the stats (lines added, thinking time,
-   output tokens) and list both PNG paths.
+   output tokens) and the Story path.
 
 Do not open the HTML preview or any image files. Do not modify any files.
 If the script fails, show the error output.

@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Share cards for Claude Code sessions",
-    "version": "0.2.3"
+    "version": "0.2.4"
   },
   "plugins": [
     {
       "name": "claude-overlay",
       "source": "./",
       "description": "Share your Claude Code sessions — /overlay renders a story card + footer strip with your session's route line, lines added, thinking time, and output tokens.",
-      "version": "0.2.3",
+      "version": "0.2.4",
       "author": {
         "name": "Jason Fan"
       },

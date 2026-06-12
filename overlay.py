@@ -698,15 +698,16 @@ def main() -> int:
         f"thinking {fmt_duration(stats['api_ms'])} · "
         f"elapsed {fmt_duration(stats['wall_ms'])}"
     )
-    print(f"Overlay:  {out}")
 
     sid8 = stats["session_id"][:8]
     exported = []
     if args.export or args.qr:
-        # The QR share page serves the exported PNGs, so make sure they exist.
         exported = export_pngs(stats)
-        for png in exported:
-            print(f"PNG:      {png}")
+        story = OUT_DIR / f"overlay-{sid8}-story.png"
+        if story in exported:
+            print(f"Story:    {story}")
+    elif not args.no_open:
+        print(f"Overlay:  {out}")
 
     if args.qr:
         if args.share_url:
