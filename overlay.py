@@ -509,25 +509,135 @@ def lan_ip() -> str:
 
 
 def share_page_html(sid8: str, variants: list[str]) -> str:
-    imgs = "\n".join(
-        f'<img src="/overlay-{sid8}-{v}.png" alt="{v} card">' for v in variants
+    ordered: list[str] = []
+    for v in ("story", "strip"):
+        if v in variants:
+            ordered.append(v)
+    for v in variants:
+        if v not in ordered:
+            ordered.append(v)
+
+    labels = {"story": "Story card", "strip": "Footer strip"}
+    slides = "\n".join(
+        f'<div class="slide" data-variant="{v}">'
+        f'<img src="/overlay-{sid8}-{v}.png" alt="{labels.get(v, v)}">'
+        f'<p class="caption">{labels.get(v, v)}</p></div>'
+        for v in ordered
     )
+    dots = "\n".join(
+        f'<button type="button" class="dot{" active" if i == 0 else ""}" '
+        f'data-index="{i}" aria-label="{labels.get(v, v)}"></button>'
+        for i, v in enumerate(ordered)
+    )
+    first = ordered[0] if ordered else "story"
+
     return f"""<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Claude Overlay — session {sid8}</title>
 <style>
-  body {{ margin: 0; background: #141210; color: #C9C2B8;
-         font: 14px/1.5 -apple-system, system-ui, sans-serif;
-         display: flex; flex-direction: column; align-items: center;
-         gap: 20px; padding: 28px 16px 48px; }}
-  img {{ max-width: min(92vw, 420px); height: auto; display: block; }}
-  p {{ margin: 0; opacity: .7; }}
+  * {{ box-sizing: border-box; margin: 0; }}
+  body {{
+    background: #141210; color: #E8E6E3;
+    font: 14px/1.5 -apple-system, system-ui, sans-serif;
+    min-height: 100dvh; display: flex; flex-direction: column;
+  }}
+  .page {{
+    flex: 1; display: flex; flex-direction: column;
+    padding: 24px 16px calc(20px + env(safe-area-inset-bottom));
+  }}
+  .carousel {{
+    flex: 1; display: flex; flex-direction: column; justify-content: center;
+    gap: 16px; min-height: 0;
+  }}
+  .viewport {{
+    overflow: hidden; width: 100%; touch-action: pan-y pinch-zoom;
+  }}
+  .track {{
+    display: flex; transition: transform 0.28s ease;
+    will-change: transform;
+  }}
+  .slide {{
+    flex: 0 0 100%; display: flex; flex-direction: column;
+    align-items: center; gap: 12px; padding: 0 4px;
+  }}
+  .slide img {{
+    max-width: min(92vw, 420px); width: 100%; height: auto; display: block;
+  }}
+  .caption {{
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: #8A8782;
+  }}
+  .dots {{
+    display: flex; justify-content: center; gap: 8px;
+  }}
+  .dot {{
+    width: 7px; height: 7px; border: 0; border-radius: 50%;
+    background: #3A3632; padding: 0; cursor: pointer;
+  }}
+  .dot.active {{ background: #EA9A76; }}
+  .download-wrap {{
+    display: flex; justify-content: center;
+    padding-top: 20px;
+  }}
+  .download {{
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 200px; padding: 14px 28px; border-radius: 999px;
+    background: #EA9A76; color: #141210; text-decoration: none;
+    font-size: 15px; font-weight: 600; letter-spacing: 0.02em;
+  }}
+  .download:active {{ opacity: 0.85; }}
 </style>
 </head><body>
-{imgs}
-<p>Press and hold an image to save it.</p>
+<div class="page">
+  <div class="carousel">
+    <div class="viewport" id="viewport">
+      <div class="track" id="track">{slides}</div>
+    </div>
+    <div class="dots" id="dots">{dots}</div>
+  </div>
+  <div class="download-wrap">
+    <a class="download" id="download"
+       href="/overlay-{sid8}-{first}.png"
+       download="claude-overlay-{first}.png">Download</a>
+  </div>
+</div>
+<script>
+(function () {{
+  const track = document.getElementById("track");
+  const dots = document.querySelectorAll(".dot");
+  const download = document.getElementById("download");
+  const slides = Array.from(document.querySelectorAll(".slide img"));
+  const names = {{"story": "claude-overlay-story.png", "strip": "claude-overlay-footer.png"}};
+  let index = 0;
+  let startX = 0;
+
+  function goTo(i) {{
+    index = Math.max(0, Math.min(slides.length - 1, i));
+    track.style.transform = "translateX(-" + (index * 100) + "%)";
+    dots.forEach((d, j) => d.classList.toggle("active", j === index));
+    const img = slides[index];
+    const variant = img.closest(".slide").dataset.variant;
+    download.href = img.src;
+    download.download = names[variant] || ("claude-overlay-" + variant + ".png");
+  }}
+
+  dots.forEach((d) => d.addEventListener("click", () => goTo(+d.dataset.index)));
+
+  const viewport = document.getElementById("viewport");
+  viewport.addEventListener("touchstart", (e) => {{
+    startX = e.touches[0].clientX;
+  }}, {{ passive: true }});
+  viewport.addEventListener("touchend", (e) => {{
+    const dx = e.changedTouches[0].clientX - startX;
+    if (dx < -40) goTo(index + 1);
+    else if (dx > 40) goTo(index - 1);
+  }}, {{ passive: true }});
+
+  goTo(0);
+}})();
+</script>
 </body></html>"""
 
 
