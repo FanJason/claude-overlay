@@ -520,7 +520,10 @@ def share_page_html(sid8: str, variants: list[str]) -> str:
     labels = {"story": "Story card", "strip": "Footer strip"}
     slides = "\n".join(
         f'<div class="slide" data-variant="{v}">'
-        f'<img src="/overlay-{sid8}-{v}.png" alt="{labels.get(v, v)}">'
+        f'<div class="preview-card preview-card--{v}">'
+        f'<a class="preview-save" href="/overlay-{sid8}-{v}.png">'
+        f'<img src="/overlay-{sid8}-{v}.png" alt="{labels.get(v, v)}" '
+        f'draggable="false"></a></div>'
         f'<p class="caption">{labels.get(v, v)}</p></div>'
         for v in ordered
     )
@@ -565,8 +568,33 @@ def share_page_html(sid8: str, variants: list[str]) -> str:
     align-items: center; justify-content: center;
     gap: 12px; padding: 0 4px;
   }}
-  .slide img {{
-    max-width: min(92vw, 420px); width: 100%; height: auto; display: block;
+  .preview-card {{
+    width: 100%; max-width: min(92vw, 420px);
+    border: 1px solid #2A2724; border-radius: 16px;
+    padding: 24px 20px; background: transparent;
+  }}
+  .preview-card--strip {{
+    max-width: min(92vw, 620px); border-radius: 12px;
+    padding: 16px 18px;
+  }}
+  .preview-save {{
+    display: block; position: relative; border-radius: 8px;
+    overflow: hidden; -webkit-touch-callout: default;
+  }}
+  .preview-save::before {{
+    content: ""; position: absolute; inset: 0; z-index: 0;
+    background-color: #171514;
+    background-image:
+      linear-gradient(45deg, #24211e 25%, transparent 25%),
+      linear-gradient(-45deg, #24211e 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #24211e 75%),
+      linear-gradient(-45deg, transparent 75%, #24211e 75%);
+    background-size: 14px 14px;
+    background-position: 0 0, 0 7px, 7px -7px, -7px 0;
+  }}
+  .preview-save img {{
+    position: relative; z-index: 1;
+    width: 100%; height: auto; display: block;
   }}
   .caption {{
     font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
@@ -593,7 +621,7 @@ def share_page_html(sid8: str, variants: list[str]) -> str:
     </div>
     <div class="dots" id="dots">{dots}</div>
   </div>
-  <p class="hint">Press and hold an image to save it.</p>
+  <p class="hint">Press and hold the image to save the transparent PNG.</p>
 </div>
 <script>
 (function () {{
