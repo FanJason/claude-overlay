@@ -312,9 +312,9 @@ HEAD = f"""<meta charset="utf-8">
     display: flex; flex-direction: column; align-items: center;
   }}
   .story {{ width: 340px; padding: 32px 28px 36px; gap: 24px; }}
-  .story-stats {{ display: flex; gap: 28px; justify-content: center; width: 100%; }}
+  .story-stats {{ display: flex; flex-direction: column; gap: 20px; align-items: center; width: 100%; }}
   .story .stat {{ align-items: center; gap: 4px; }}
-  .story .label {{ font-size: 8px; color: var(--fg-dim); }}
+  .story .label {{ font-size: 8px; color: var(--fg); }}
   .story .value {{ font-size: 24px; }}
   .story .wordmark {{ margin-top: 4px; }}
   .strip {{ width: 620px; flex-direction: row; align-items: center; gap: 20px; padding: 14px 22px; border-radius: 12px; }}
@@ -346,7 +346,7 @@ def card_html(stats: dict, variant: str) -> str:
     if variant == "story":
         return (
             '<div class="card story">'
-            f'<div class="stats-row story-stats">{stats_html}</div>'
+            f'<div class="stats-col story-stats">{stats_html}</div>'
             f"{route_svg(stats['route'], 230, 120, 3)}"
             '<div class="wordmark">Claude</div></div>'
         )
