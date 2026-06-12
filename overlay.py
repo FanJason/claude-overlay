@@ -762,7 +762,7 @@ def share_page_html(sid8: str, variants: list[str]) -> str:
   <div class="footer">
     {dots_html}
     <p class="hint">Press and hold the image, then tap Save to Photos.</p>
-    <p class="note">These stats add up all your Claude Code sessions from today. Cutoff at 4 AM instead of 12 AM to account for peak developer time.</p>
+    <p class="note">These stats add up your Claude Code sessions from today. Cutoff at 4 AM instead of 12 AM to account for peak developer time.</p>
   </div>
 </div>
 <script>
