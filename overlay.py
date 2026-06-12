@@ -547,19 +547,23 @@ def share_page_html(sid8: str, variants: list[str]) -> str:
     padding: 24px 16px calc(20px + env(safe-area-inset-bottom));
   }}
   .carousel {{
-    flex: 1; display: flex; flex-direction: column; justify-content: center;
+    flex: 1; display: flex; flex-direction: column;
     gap: 16px; min-height: 0;
   }}
   .viewport {{
+    flex: 1; min-height: 0;
     overflow: hidden; width: 100%; touch-action: pan-y pinch-zoom;
   }}
   .track {{
-    display: flex; transition: transform 0.28s ease;
+    display: flex; height: 100%; align-items: stretch;
+    transition: transform 0.28s ease;
     will-change: transform;
   }}
   .slide {{
-    flex: 0 0 100%; display: flex; flex-direction: column;
-    align-items: center; gap: 12px; padding: 0 4px;
+    flex: 0 0 100%; height: 100%;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 12px; padding: 0 4px;
   }}
   .slide img {{
     max-width: min(92vw, 420px); width: 100%; height: auto; display: block;
