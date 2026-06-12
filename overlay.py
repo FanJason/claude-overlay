@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a Strava-style overlay card for a Claude Code session.
+"""Generate a share overlay card for a Claude Code session.
 
 Reads the session transcript JSONL from ~/.claude/projects (and, when
 available, statusline snapshots captured by statusline.py) and renders a
@@ -27,7 +27,7 @@ CLAUDE_PROJECTS = Path.home() / ".claude" / "projects"
 SNAPSHOT_DIR = Path.home() / ".claude-overlay" / "sessions"
 OUT_DIR = Path(__file__).parent / "out"
 
-ACCENT = "#D97757"  # Claude terracotta — our Strava orange
+ACCENT = "#D97757"  # Claude terracotta
 
 
 # --------------------------------------------------------------------------

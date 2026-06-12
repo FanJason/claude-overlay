@@ -1,5 +1,5 @@
 ---
-description: Generate a Strava-style share card for this session
+description: Generate a share card for this session
 allowed-tools: Bash(python3 *), Bash(open *)
 ---
 

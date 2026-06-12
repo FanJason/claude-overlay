@@ -1,6 +1,6 @@
 # claude-overlay
 
-Strava-style share cards for Claude Code sessions. Two formats: a portrait
+Share your Claude Code sessions. Two formats: a portrait
 story card and a landscape footer strip — one terracotta route line
 (cumulative output tokens over the session), three quiet stats.
 
