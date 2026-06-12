@@ -324,6 +324,19 @@ def fmt_duration(ms: float) -> str:
     return f"{m}:{sec:02d}"
 
 
+def fmt_thinking(ms: float) -> str:
+    """Unit-labelled duration for the thinking-time metric: `Xm Xs`, and
+    `Xh Xm` once it crosses an hour, so the unit is always explicit."""
+    s = int(ms / 1000)
+    h, rem = divmod(s, 3600)
+    m, sec = divmod(rem, 60)
+    if h:
+        return f"{h}h {m}m"
+    if m:
+        return f"{m}m {sec}s"
+    return f"{sec}s"
+
+
 # --------------------------------------------------------------------------
 # SVG route path (Catmull-Rom -> cubic Bezier, same as the canvas mockup)
 # --------------------------------------------------------------------------
@@ -386,7 +399,7 @@ def stat(value: str, label: str, *, label_first: bool = False) -> str:
 
 HEAD = f"""<meta charset="utf-8">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700&family=Open+Sans:wght@500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700&family=Open+Sans:wght@600;700&display=swap" rel="stylesheet">
 <style>
   :root {{ --accent: {ACCENT}; --fg: #FFFFFF; --fg-dim: #FFFFFF; --bg: #0F0E0D; --card: #171514; --stroke: #2A2724; }}
   * {{ margin: 0; box-sizing: border-box; }}
@@ -405,7 +418,7 @@ HEAD = f"""<meta charset="utf-8">
   .story {{ width: 340px; padding: 32px 28px 36px; gap: 14px; }}
   .story-stats {{ display: flex; flex-direction: column; gap: 20px; align-items: center; width: 100%; }}
   .story .stat {{ align-items: center; gap: 7px; }}
-  .story .label {{ font-size: 13px; color: var(--fg); }}
+  .story .label {{ font-size: 11px; letter-spacing: 0.06em; color: var(--fg); }}
   .story .value {{ font-size: 40px; }}
   .story .wordmark {{ font-size: 32px; }}
   .strip {{ width: 620px; flex-direction: column; align-items: stretch; gap: 8px; padding: 16px 24px 14px; border-radius: 12px; }}
@@ -426,17 +439,17 @@ HEAD = f"""<meta charset="utf-8">
   .stats-col {{ display: flex; flex-direction: column; gap: 20px; align-items: center; }}
   .stats-row {{ display: flex; gap: 28px; margin-left: auto; }}
   .stat {{ display: flex; flex-direction: column; gap: 0; white-space: nowrap; }}
-  .value {{ font-size: 24px; font-weight: 600; line-height: 1; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }}
-  .label {{ font-size: 10px; font-weight: 500; line-height: 1; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg); }}
+  .value {{ font-size: 24px; font-weight: 700; line-height: 1; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }}
+  .label {{ font-size: 10px; font-weight: 600; line-height: 1; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg); }}
 </style>"""
 
 
 def card_html(stats: dict, variant: str) -> str:
-    lines = f"+{stats['lines_added']:,}"
-    thinking = fmt_duration(stats["api_ms"])
+    lines = f"+{stats['lines_added']:,}-{stats['lines_removed']:,}"
+    thinking = fmt_thinking(stats["api_ms"])
     tokens = fmt_tokens(stats["output_tokens"])
     stats_html = (
-        stat(lines, "Lines added", label_first=(variant == "story"))
+        stat(lines, "Lines changed", label_first=(variant == "story"))
         + stat(tokens, "Output tokens", label_first=(variant == "story"))
         + stat(thinking, "Thinking time", label_first=(variant == "story"))
     )
