@@ -49,6 +49,15 @@ To test the plugin locally without a marketplace:
 claude --plugin-dir /path/to/claude-overlay
 ```
 
+### Share card when you exit (zero tokens)
+
+When a session ends (`/exit`, closing the terminal, etc.), a `SessionEnd`
+hook runs `overlay.py --qr` and prints stats, the Story path, and a scannable
+QR to **stderr** (the only output visible in the terminal on exit). The QR
+opens the story card only. Nothing opens in the browser. If the ending session
+has no output yet, it falls back to your most recent session in the same
+project.
+
 ## Quick start (script, no plugin)
 
 Render an overlay for your most recent Claude Code session:

@@ -1,5 +1,5 @@
 {
-  "description": "Zero-token /overlay via UserPromptSubmit hook",
+  "description": "Zero-token /overlay and SessionEnd share QR",
   "hooks": {
     "UserPromptSubmit": [
       {
@@ -7,6 +7,17 @@
           {
             "type": "command",
             "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/prompt_submit.py\"",
+            "timeout": 45
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/session_end.py\"",
             "timeout": 45
           }
         ]
