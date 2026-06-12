@@ -529,7 +529,6 @@ def share_page_html(sid8: str, variants: list[str]) -> str:
         f'data-index="{i}" aria-label="{labels.get(v, v)}"></button>'
         for i, v in enumerate(ordered)
     )
-    first = ordered[0] if ordered else "story"
 
     return f"""<!doctype html>
 <html lang="en"><head>
@@ -577,17 +576,19 @@ def share_page_html(sid8: str, variants: list[str]) -> str:
     background: #3A3632; padding: 0; cursor: pointer;
   }}
   .dot.active {{ background: #EA9A76; }}
-  .download-wrap {{
+  .save-wrap {{
     display: flex; justify-content: center;
     padding-top: 20px;
   }}
-  .download {{
+  .save {{
     display: inline-flex; align-items: center; justify-content: center;
     min-width: 200px; padding: 14px 28px; border-radius: 999px;
-    background: #EA9A76; color: #141210; text-decoration: none;
-    font-size: 15px; font-weight: 600; letter-spacing: 0.02em;
+    background: #EA9A76; color: #141210; border: 0;
+    font: 600 15px/1.2 -apple-system, system-ui, sans-serif;
+    letter-spacing: 0.02em; cursor: pointer;
   }}
-  .download:active {{ opacity: 0.85; }}
+  .save:active {{ opacity: 0.85; }}
+  .save:disabled {{ opacity: 0.55; cursor: wait; }}
 </style>
 </head><body>
 <div class="page">
@@ -597,32 +598,77 @@ def share_page_html(sid8: str, variants: list[str]) -> str:
     </div>
     <div class="dots" id="dots">{dots}</div>
   </div>
-  <div class="download-wrap">
-    <a class="download" id="download"
-       href="/overlay-{sid8}-{first}.png"
-       download="claude-overlay-{first}.png">Download</a>
+  <div class="save-wrap">
+    <button type="button" class="save" id="save">Save image</button>
   </div>
 </div>
 <script>
 (function () {{
   const track = document.getElementById("track");
   const dots = document.querySelectorAll(".dot");
-  const download = document.getElementById("download");
+  const saveBtn = document.getElementById("save");
   const slides = Array.from(document.querySelectorAll(".slide img"));
   const names = {{"story": "claude-overlay-story.png", "strip": "claude-overlay-footer.png"}};
+  const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
   let index = 0;
   let startX = 0;
+
+  function currentSlide() {{
+    const img = slides[index];
+    const variant = img.closest(".slide").dataset.variant;
+    return {{
+      img,
+      variant,
+      filename: names[variant] || ("claude-overlay-" + variant + ".png"),
+    }};
+  }}
 
   function goTo(i) {{
     index = Math.max(0, Math.min(slides.length - 1, i));
     track.style.transform = "translateX(-" + (index * 100) + "%)";
     dots.forEach((d, j) => d.classList.toggle("active", j === index));
-    const img = slides[index];
-    const variant = img.closest(".slide").dataset.variant;
-    download.href = img.src;
-    download.download = names[variant] || ("claude-overlay-" + variant + ".png");
   }}
 
+  async function saveImage() {{
+    const {{ img, filename }} = currentSlide();
+    saveBtn.disabled = true;
+    const label = saveBtn.textContent;
+    saveBtn.textContent = "Saving…";
+    try {{
+      const resp = await fetch(img.src);
+      const blob = await resp.blob();
+      const file = new File([blob], filename, {{ type: "image/png" }});
+
+      if (navigator.share && (!navigator.canShare || navigator.canShare({{ files: [file] }}))) {{
+        await navigator.share({{ files: [file], title: "Claude Overlay" }});
+        return;
+      }}
+
+      if (mobile) {{
+        // iOS/Android fallback: open the PNG natively (share/save sheet in the viewer).
+        window.location.assign(img.src);
+        return;
+      }}
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }} catch (err) {{
+      if (err && err.name !== "AbortError") {{
+        window.location.assign(currentSlide().img.src);
+      }}
+    }} finally {{
+      saveBtn.disabled = false;
+      saveBtn.textContent = label;
+    }}
+  }}
+
+  saveBtn.addEventListener("click", saveImage);
   dots.forEach((d) => d.addEventListener("click", () => goTo(+d.dataset.index)));
 
   const viewport = document.getElementById("viewport");
