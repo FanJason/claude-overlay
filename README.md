@@ -25,8 +25,7 @@ Then, inside any session:
 
 Claude runs the generator for the current session and prints a scannable QR
 code in the terminal. Scan it with your phone (same Wi-Fi network) to open
-a carousel share page — story card by default, swipe left for the footer
-strip, then press and hold the image to save the transparent PNG. A temporary local server makes them available
+a share page with the story card — press and hold the image and tap Save to Photos. A temporary local server makes them available
 for 5 minutes, no upload involved. Nothing is opened automatically in the browser.
 
 **`/overlay` uses zero model tokens.** A `UserPromptSubmit` hook intercepts
@@ -50,14 +49,6 @@ To test the plugin locally without a marketplace:
 claude --plugin-dir /path/to/claude-overlay
 ```
 
-### Share card when you exit (zero tokens)
-
-When a session ends (`/exit`, closing the terminal, etc.), a `SessionEnd`
-hook runs `overlay.py --export --qr` and prints stats, Story path, and a
-scannable QR to **stderr** (the only output visible in the terminal on
-exit). Nothing opens in the browser. If the ending session has no output
-yet, it falls back to your most recent session in the same project.
-
 ## Quick start (script, no plugin)
 
 Render an overlay for your most recent Claude Code session:
@@ -78,10 +69,10 @@ python3 overlay.py --no-open        # write HTML, don't open browser
 python3 overlay.py --qr             # QR in terminal (no browser open)
 ```
 
-`--qr` exports the PNGs, starts a temporary local server (5 minutes, LAN
-only), and prints a QR code linking to a mobile carousel — swipe between
-story and footer, then press and hold the image to save the transparent PNG. Pass `--share-url <url>` to encode
-a custom link instead.
+`--qr` exports the story PNG, starts a temporary local server (5 minutes, LAN
+only), and prints a QR code linking to the story card — press and hold the
+image and tap Save to Photos. Use `--export` to also write the footer strip
+PNG. Pass `--share-url <url>` to encode a custom link instead.
 
 ## Export share images
 
@@ -91,10 +82,10 @@ python3 overlay.py --export
 
 Writes two PNGs to `out/` alongside the HTML:
 
-- `overlay-<id>-story.png` — 760x1000 portrait story card
-- `overlay-<id>-strip.png` — 1320x200 landscape footer strip
+- `overlay-<id>-story.png` — portrait story card
+- `overlay-<id>-strip.png` — landscape footer strip (auto-trimmed, transparent)
 
-Both are 2x (retina) with transparent margins, ready to drop onto a
+Both are 2x (retina) with transparent backgrounds, ready to drop onto a
 screenshot, social post, or stream layout. Export uses headless Chrome
 (or Chromium/Edge/Brave/Arc — whichever is installed); if none is found,
 open the HTML and screenshot manually.

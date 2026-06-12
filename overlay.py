@@ -280,7 +280,7 @@ def smooth_path(pts) -> str:
 
 
 def route_svg(route, w: int, h: int, stroke: float) -> str:
-    pts = route_points(route, w, h, stroke * 2.5)
+    pts = route_points(route, w, h, stroke * 1.5)
     return (
         f'<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}">'
         f'<path d="{smooth_path(pts)}" fill="none" stroke="{ACCENT_LINE}" '
@@ -304,31 +304,36 @@ HEAD = f"""<meta charset="utf-8">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700&family=Open+Sans:wght@500;600&display=swap" rel="stylesheet">
 <style>
-  :root {{ --accent: {ACCENT}; --fg: #E8E6E3; --fg-dim: #8A8782; --bg: #0F0E0D; --card: #171514; --stroke: #2A2724; }}
+  :root {{ --accent: {ACCENT}; --fg: #FFFFFF; --fg-dim: #FFFFFF; --bg: #0F0E0D; --card: #171514; --stroke: #2A2724; }}
   * {{ margin: 0; box-sizing: border-box; }}
   body {{ color: var(--fg); font-family: "Open Sans", sans-serif; }}
   .card {{
     background: var(--card); border: 1px solid var(--stroke); border-radius: 16px;
     display: flex; flex-direction: column; align-items: center;
   }}
-  .story {{ width: 340px; padding: 32px 28px 36px; gap: 24px; }}
+  .story {{ width: 340px; padding: 32px 28px 36px; gap: 14px; }}
   .story-stats {{ display: flex; flex-direction: column; gap: 20px; align-items: center; width: 100%; }}
-  .story .stat {{ align-items: center; gap: 4px; }}
-  .story .label {{ font-size: 8px; color: var(--fg); }}
-  .story .value {{ font-size: 24px; }}
-  .story .wordmark {{ margin-top: 4px; }}
-  .strip {{ width: 620px; flex-direction: row; align-items: center; gap: 20px; padding: 14px 22px; border-radius: 12px; }}
-  .strip svg {{ flex-shrink: 0; margin-left: 12px; margin-right: 10px; }}
-  .strip .value {{ font-size: 17px; }}
-  .strip .label {{ font-size: 9px; }}
+  .story .stat {{ align-items: center; gap: 1px; }}
+  .story .label {{ font-size: 13px; color: var(--fg); }}
+  .story .value {{ font-size: 40px; }}
+  .story .wordmark {{ font-size: 32px; }}
+  .strip {{ width: 620px; flex-direction: column; align-items: stretch; gap: 8px; padding: 16px 24px 14px; border-radius: 12px; }}
+  .strip-top {{ display: flex; align-items: center; gap: 20px; width: 100%; }}
+  .strip-top .wordmark {{ flex-shrink: 0; font-size: 32px; }}
+  .strip-top .route-wrap {{ flex: 1; display: flex; justify-content: center; min-width: 0; }}
+  .story svg, .strip-top svg {{ display: block; }}
+  .strip .stats-row {{ justify-content: center; margin-left: 0; width: 100%; }}
+  .strip .stat {{ gap: 1px; }}
+  .strip .value {{ font-size: 32px; }}
+  .strip .label {{ font-size: 14px; }}
   .wordmark {{
     font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
-    font-size: 20px; font-weight: 700; letter-spacing: 0.22em;
+    font-size: 20px; font-weight: 700; letter-spacing: 0.12em;
     text-transform: uppercase;
   }}
   .stats-col {{ display: flex; flex-direction: column; gap: 20px; align-items: center; }}
   .stats-row {{ display: flex; gap: 28px; margin-left: auto; }}
-  .stat {{ display: flex; flex-direction: column; gap: 2px; white-space: nowrap; }}
+  .stat {{ display: flex; flex-direction: column; gap: 0; white-space: nowrap; }}
   .value {{ font-size: 24px; font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }}
   .label {{ font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg); }}
 </style>"""
@@ -347,13 +352,15 @@ def card_html(stats: dict, variant: str) -> str:
         return (
             '<div class="card story">'
             f'<div class="stats-col story-stats">{stats_html}</div>'
-            f"{route_svg(stats['route'], 190, 100, 2.5)}"
+            f"{route_svg(stats['route'], 190, 78, 2.5)}"
             '<div class="wordmark">Claude</div></div>'
         )
     return (
         '<div class="card strip">'
-        '<div class="wordmark" style="margin-right:-8px">Claude</div>'
-        f"{route_svg(stats['route'], 110, 34, 1.5)}"
+        '<div class="strip-top">'
+        '<div class="wordmark">Claude</div>'
+        f'<div class="route-wrap">{route_svg(stats["route"], 220, 38, 1.5)}</div>'
+        '</div>'
         f'<div class="stats-row">{stats_html}</div></div>'
     )
 
@@ -400,9 +407,12 @@ def render_export_html(stats: dict, variant: str) -> str:
 <html>
 <head>{HEAD}
 <style>
-  body {{ background: transparent; width: 100vw; height: 100vh;
+  html, body {{ background: transparent !important; }}
+  body {{ width: 100vw; height: 100vh;
          display: flex; align-items: center; justify-content: center; }}
-  .card {{ background: transparent; border: none; }}
+  .card, .strip, .strip-top, .route-wrap, .stats-row, .stat {{
+    background: transparent !important; border: none !important;
+  }}
 </style>
 </head>
 <body>{card_html(stats, variant)}</body>
@@ -428,8 +438,59 @@ CHROME_PATHS = [
 # window: CSS px · crop: device px (2x scale).
 EXPORT_GEOMETRY = {
     "story": {"window": (600, 600), "crop": (760, 1000)},
-    "strip": {"window": (800, 300), "crop": (1320, 200)},
+    "strip": {"window": (800, 440), "trim_pad": 40},
 }
+
+
+def finalize_export_png(
+    path: Path,
+    *,
+    crop: tuple[int, int] | None = None,
+    trim_pad: int | None = None,
+) -> None:
+    """Center-crop and/or trim PNG while preserving transparency."""
+    import subprocess
+
+    try:
+        from PIL import Image
+    except ImportError:
+        if crop:
+            crop_w, crop_h = crop
+            subprocess.run(
+                ["sips", "--cropToHeightWidth", str(crop_h), str(crop_w), str(path)],
+                check=True,
+                capture_output=True,
+            )
+        elif trim_pad is not None:
+            # Approximate center crop when Pillow is unavailable.
+            subprocess.run(
+                ["sips", "--cropToHeightWidth", "340", "1320", str(path)],
+                check=True,
+                capture_output=True,
+            )
+        return
+
+    im = Image.open(path).convert("RGBA")
+    if crop:
+        crop_w, crop_h = crop
+        left = max(0, (im.size[0] - crop_w) // 2)
+        top = max(0, (im.size[1] - crop_h) // 2)
+        im = im.crop((left, top, left + crop_w, top + crop_h))
+    if trim_pad is not None:
+        bbox = im.getbbox()
+        if bbox:
+            x0, y0, x1, y1 = bbox
+            x0 = max(0, x0 - trim_pad)
+            y0 = max(0, y0 - trim_pad)
+            x1 = min(im.size[0], x1 + trim_pad)
+            y1 = min(im.size[1], y1 + trim_pad)
+            im = im.crop((x0, y0, x1, y1))
+    px = im.load()
+    for y in range(im.size[1]):
+        for x in range(im.size[0]):
+            if px[x, y][3] == 0:
+                px[x, y] = (0, 0, 0, 0)
+    im.save(path, format="PNG", optimize=True)
 
 
 def find_chrome() -> str | None:
@@ -439,7 +500,7 @@ def find_chrome() -> str | None:
     return None
 
 
-def export_pngs(stats: dict) -> list[Path]:
+def export_pngs(stats: dict, *, variants: list[str] | None = None) -> list[Path]:
     import subprocess
     import tempfile
 
@@ -452,10 +513,11 @@ def export_pngs(stats: dict) -> list[Path]:
         )
         return []
 
+    targets = variants or list(EXPORT_GEOMETRY)
     outputs = []
-    for variant, geo in EXPORT_GEOMETRY.items():
+    for variant in targets:
+        geo = EXPORT_GEOMETRY[variant]
         w, h = geo["window"]
-        crop_w, crop_h = geo["crop"]
         with tempfile.NamedTemporaryFile(
             suffix=".html", delete=False, mode="w"
         ) as f:
@@ -478,10 +540,10 @@ def export_pngs(stats: dict) -> list[Path]:
             capture_output=True,
         )
         tmp.unlink()
-        subprocess.run(
-            ["sips", "--cropToHeightWidth", str(crop_h), str(crop_w), str(png)],
-            check=True,
-            capture_output=True,
+        finalize_export_png(
+            png,
+            crop=geo.get("crop"),
+            trim_pad=geo.get("trim_pad"),
         )
         outputs.append(png)
     return outputs
@@ -520,17 +582,19 @@ def share_page_html(sid8: str, variants: list[str]) -> str:
     labels = {"story": "Story card", "strip": "Footer strip"}
     slides = "\n".join(
         f'<div class="slide" data-variant="{v}">'
-        f'<div class="preview-card preview-card--{v}">'
-        f'<a class="preview-save" href="/overlay-{sid8}-{v}.png">'
         f'<img src="/overlay-{sid8}-{v}.png" alt="{labels.get(v, v)}" '
-        f'draggable="false"></a></div></div>'
+        f'draggable="false"></div>'
         for v in ordered
     )
-    dots = "\n".join(
-        f'<button type="button" class="dot{" active" if i == 0 else ""}" '
-        f'data-index="{i}" aria-label="{labels.get(v, v)}"></button>'
-        for i, v in enumerate(ordered)
-    )
+    dots = ""
+    dots_html = ""
+    if len(ordered) > 1:
+        dots = "\n".join(
+            f'<button type="button" class="dot{" active" if i == 0 else ""}" '
+            f'data-index="{i}" aria-label="{labels.get(v, v)}"></button>'
+            for i, v in enumerate(ordered)
+        )
+        dots_html = f'<div class="dots" id="dots">{dots}</div>'
 
     return f"""<!doctype html>
 <html lang="en"><head>
@@ -539,61 +603,45 @@ def share_page_html(sid8: str, variants: list[str]) -> str:
 <title>Claude Overlay — session {sid8}</title>
 <style>
   * {{ box-sizing: border-box; margin: 0; }}
+  html, body {{ height: 100%; }}
   body {{
-    background: #141210; color: #E8E6E3;
+    background: #141210; color: #FFFFFF;
     font: 14px/1.5 -apple-system, system-ui, sans-serif;
     min-height: 100dvh; display: flex; flex-direction: column;
   }}
   .page {{
     flex: 1; display: flex; flex-direction: column;
-    padding: 24px 16px calc(20px + env(safe-area-inset-bottom));
+    min-height: 100dvh;
+    padding: max(16px, env(safe-area-inset-top)) 16px 0;
   }}
-  .carousel {{
-    flex: 1; display: flex; flex-direction: column;
-    gap: 16px; min-height: 0;
+  .main {{
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    min-height: 0; width: 100%; padding: 0 0 16px;
   }}
   .viewport {{
-    flex: 1; min-height: 0;
-    overflow: hidden; width: 100%; touch-action: pan-y pinch-zoom;
+    width: 100%; overflow: hidden; touch-action: pan-y pinch-zoom;
   }}
   .track {{
-    display: flex; height: 100%; align-items: stretch;
+    display: flex; align-items: center;
     transition: transform 0.28s ease;
     will-change: transform;
   }}
   .slide {{
-    flex: 0 0 100%; height: 100%;
+    flex: 0 0 100%;
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    gap: 12px; padding: 0 4px;
+    padding: 0 4px;
   }}
-  .preview-card {{
-    width: 100%; max-width: min(92vw, 420px);
-    border: 1px solid #2A2724; border-radius: 16px;
-    padding: 24px 20px; background: transparent;
+  .slide img {{
+    display: block; width: 100%; height: auto;
+    max-width: min(92vw, 420px);
+    -webkit-touch-callout: default;
+    user-select: none; -webkit-user-select: none;
   }}
-  .preview-card--strip {{
-    max-width: min(92vw, 620px); border-radius: 12px;
-    padding: 16px 18px;
-  }}
-  .preview-save {{
-    display: block; position: relative; border-radius: 8px;
-    overflow: hidden; -webkit-touch-callout: default;
-  }}
-  .preview-save::before {{
-    content: ""; position: absolute; inset: 0; z-index: 0;
-    background-color: #171514;
-    background-image:
-      linear-gradient(45deg, #24211e 25%, transparent 25%),
-      linear-gradient(-45deg, #24211e 25%, transparent 25%),
-      linear-gradient(45deg, transparent 75%, #24211e 75%),
-      linear-gradient(-45deg, transparent 75%, #24211e 75%);
-    background-size: 14px 14px;
-    background-position: 0 0, 0 7px, 7px -7px, -7px 0;
-  }}
-  .preview-save img {{
-    position: relative; z-index: 1;
-    width: 100%; height: auto; display: block;
+  .slide[data-variant="strip"] img {{ max-width: min(92vw, 620px); }}
+  .footer {{
+    flex-shrink: 0; display: flex; flex-direction: column; align-items: center;
+    gap: 16px; padding: 0 16px calc(20px + env(safe-area-inset-bottom));
   }}
   .dots {{
     display: flex; justify-content: center; gap: 8px;
@@ -604,19 +652,20 @@ def share_page_html(sid8: str, variants: list[str]) -> str:
   }}
   .dot.active {{ background: #EA9A76; }}
   .hint {{
-    text-align: center; padding-top: 20px;
-    font-size: 13px; color: #8A8782;
+    text-align: center; font-size: 13px; color: #FFFFFF;
   }}
 </style>
 </head><body>
 <div class="page">
-  <div class="carousel">
+  <div class="main">
     <div class="viewport" id="viewport">
       <div class="track" id="track">{slides}</div>
     </div>
-    <div class="dots" id="dots">{dots}</div>
   </div>
-  <p class="hint">Press and hold the image to save the transparent PNG.</p>
+  <div class="footer">
+    {dots_html}
+    <p class="hint">Press and hold the image, then tap Save to Photos.</p>
+  </div>
 </div>
 <script>
 (function () {{
@@ -649,16 +698,19 @@ def share_page_html(sid8: str, variants: list[str]) -> str:
 </body></html>"""
 
 
-def run_share_server(sid8: str, port: int) -> int:
+def run_share_server(
+    sid8: str, port: int, variants: list[str] | None = None,
+) -> int:
     """Internal mode: serve the share page + PNGs from OUT_DIR, then exit."""
     import http.server
     import os
     import threading
 
-    variants = [
-        v for v in EXPORT_GEOMETRY
-        if (OUT_DIR / f"overlay-{sid8}-{v}.png").is_file()
-    ]
+    if variants is None:
+        variants = [
+            v for v in EXPORT_GEOMETRY
+            if (OUT_DIR / f"overlay-{sid8}-{v}.png").is_file()
+        ]
     page = share_page_html(sid8, variants).encode()
 
     class Handler(http.server.SimpleHTTPRequestHandler):
@@ -672,6 +724,17 @@ def run_share_server(sid8: str, port: int) -> int:
                 self.send_header("Content-Length", str(len(page)))
                 self.end_headers()
                 self.wfile.write(page)
+            elif self.path.endswith(".png"):
+                file_path = OUT_DIR / Path(self.path.lstrip("/")).name
+                if file_path.is_file():
+                    data = file_path.read_bytes()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "image/png")
+                    self.send_header("Content-Length", str(len(data)))
+                    self.end_headers()
+                    self.wfile.write(data)
+                else:
+                    self.send_error(404)
             else:
                 super().do_GET()
 
@@ -684,7 +747,9 @@ def run_share_server(sid8: str, port: int) -> int:
     return 0
 
 
-def start_share_server(sid8: str) -> str | None:
+def start_share_server(
+    sid8: str, variants: list[str] | None = None,
+) -> str | None:
     """Spawn a detached copy of this script in serve mode; return the URL."""
     import socket
     import subprocess
@@ -693,9 +758,14 @@ def start_share_server(sid8: str) -> str | None:
         s.bind(("", 0))
         port = s.getsockname()[1]
 
+    cmd = [
+        sys.executable, str(Path(__file__).resolve()),
+        "--serve", sid8, "--serve-port", str(port),
+    ]
+    if variants:
+        cmd.extend(["--serve-variants", ",".join(variants)])
     subprocess.Popen(
-        [sys.executable, str(Path(__file__).resolve()),
-         "--serve", sid8, "--serve-port", str(port)],
+        cmd,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         start_new_session=True,
@@ -834,6 +904,7 @@ def main() -> int:
     )
     ap.add_argument("--serve", help=argparse.SUPPRESS)
     ap.add_argument("--serve-port", type=int, help=argparse.SUPPRESS)
+    ap.add_argument("--serve-variants", help=argparse.SUPPRESS)
     ap.add_argument(
         "--rate-status",
         action="store_true",
@@ -843,7 +914,12 @@ def main() -> int:
     args = ap.parse_args()
 
     if args.serve:
-        return run_share_server(args.serve, args.serve_port)
+        serve_variants = None
+        if args.serve_variants:
+            serve_variants = [
+                v.strip() for v in args.serve_variants.split(",") if v.strip()
+            ]
+        return run_share_server(args.serve, args.serve_port, serve_variants)
 
     if args.rate_status:
         return print_rate_status()
@@ -906,10 +982,15 @@ def main() -> int:
     sid8 = stats["session_id"][:8]
     exported = []
     if args.export or args.qr:
-        exported = export_pngs(stats)
-        story = OUT_DIR / f"overlay-{sid8}-story.png"
-        if story in exported:
-            print(f"Story:    {story}")
+        export_variants = list(EXPORT_GEOMETRY) if args.export else ["story"]
+        exported = export_pngs(stats, variants=export_variants)
+        print_variants = export_variants if args.export else ["story"]
+        for variant, label in (("story", "Story"), ("strip", "Footer")):
+            if variant not in print_variants:
+                continue
+            path = OUT_DIR / f"overlay-{sid8}-{variant}.png"
+            if path in exported:
+                print(f"{label + ':':<8} {path}")
     elif not args.no_open:
         print(f"Overlay:  {out}")
 
@@ -917,7 +998,7 @@ def main() -> int:
         if args.share_url:
             print_qr(args.share_url)
         elif exported:
-            url = start_share_server(sid8)
+            url = start_share_server(sid8, variants=["story"])
             print_qr(url)
             print(
                 f"  Link serves your card on this Wi-Fi network for "

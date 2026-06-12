@@ -1,2 +1,3 @@
-# Optional — only needed for terminal QR codes (--qr). Everything else is stdlib.
+# Optional — QR codes (--qr) and best PNG alpha trimming (export).
 qrcode>=7.0
+Pillow>=10.0
