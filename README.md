@@ -46,6 +46,32 @@ Check limit status: `python3 overlay.py --rate-status`
 To test the plugin locally without a marketplace:
 
 ```bash
+./scripts/dev-claude.sh
+```
+
+That runs `claude --plugin-dir` pointed at this repo. Local `--plugin-dir`
+copies **override** the installed marketplace version for the same plugin
+name, so edits here take effect on the next Claude restart (no `/plugin update`
+needed). Use `./scripts/test-hooks.sh` to smoke-test hooks without a session.
+
+**Local dev loop**
+
+1. Edit plugin files in this repo.
+2. `./scripts/test-hooks.sh` — pipes fake hook JSON to `prompt_submit.py` and
+   `run_session_end.sh` (writes to `~/.claude/claude-overlay-session-end.log`).
+3. `./scripts/dev-claude.sh` — interactive Claude with the local plugin.
+4. In Claude: `/hooks` → confirm `SessionEnd` lists `claude-overlay`.
+5. Run `/overlay` or `/exit`; tail the log:
+
+   ```bash
+   tail -f ~/.claude/claude-overlay-session-end.log
+   ```
+
+6. Optional debug: `CLAUDE_CODE_DEBUG=1 ./scripts/dev-claude.sh --debug hooks`
+
+Or manually:
+
+```bash
 claude --plugin-dir /path/to/claude-overlay
 ```
 
