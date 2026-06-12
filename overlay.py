@@ -580,19 +580,10 @@ def share_page_html(sid8: str, variants: list[str]) -> str:
     background: #3A3632; padding: 0; cursor: pointer;
   }}
   .dot.active {{ background: #EA9A76; }}
-  .save-wrap {{
-    display: flex; justify-content: center;
-    padding-top: 20px;
+  .hint {{
+    text-align: center; padding-top: 20px;
+    font-size: 13px; color: #8A8782;
   }}
-  .save {{
-    display: inline-flex; align-items: center; justify-content: center;
-    min-width: 200px; padding: 14px 28px; border-radius: 999px;
-    background: #EA9A76; color: #141210; border: 0;
-    font: 600 15px/1.2 -apple-system, system-ui, sans-serif;
-    letter-spacing: 0.02em; cursor: pointer;
-  }}
-  .save:active {{ opacity: 0.85; }}
-  .save:disabled {{ opacity: 0.55; cursor: wait; }}
 </style>
 </head><body>
 <div class="page">
@@ -602,77 +593,21 @@ def share_page_html(sid8: str, variants: list[str]) -> str:
     </div>
     <div class="dots" id="dots">{dots}</div>
   </div>
-  <div class="save-wrap">
-    <button type="button" class="save" id="save">Save image</button>
-  </div>
+  <p class="hint">Press and hold an image to save it.</p>
 </div>
 <script>
 (function () {{
   const track = document.getElementById("track");
   const dots = document.querySelectorAll(".dot");
-  const saveBtn = document.getElementById("save");
-  const slides = Array.from(document.querySelectorAll(".slide img"));
-  const names = {{"story": "claude-overlay-story.png", "strip": "claude-overlay-footer.png"}};
-  const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
   let index = 0;
   let startX = 0;
 
-  function currentSlide() {{
-    const img = slides[index];
-    const variant = img.closest(".slide").dataset.variant;
-    return {{
-      img,
-      variant,
-      filename: names[variant] || ("claude-overlay-" + variant + ".png"),
-    }};
-  }}
-
   function goTo(i) {{
-    index = Math.max(0, Math.min(slides.length - 1, i));
+    index = Math.max(0, Math.min(dots.length - 1, i));
     track.style.transform = "translateX(-" + (index * 100) + "%)";
     dots.forEach((d, j) => d.classList.toggle("active", j === index));
   }}
 
-  async function saveImage() {{
-    const {{ img, filename }} = currentSlide();
-    saveBtn.disabled = true;
-    const label = saveBtn.textContent;
-    saveBtn.textContent = "Saving…";
-    try {{
-      const resp = await fetch(img.src);
-      const blob = await resp.blob();
-      const file = new File([blob], filename, {{ type: "image/png" }});
-
-      if (navigator.share && (!navigator.canShare || navigator.canShare({{ files: [file] }}))) {{
-        await navigator.share({{ files: [file], title: "Claude Overlay" }});
-        return;
-      }}
-
-      if (mobile) {{
-        // iOS/Android fallback: open the PNG natively (share/save sheet in the viewer).
-        window.location.assign(img.src);
-        return;
-      }}
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    }} catch (err) {{
-      if (err && err.name !== "AbortError") {{
-        window.location.assign(currentSlide().img.src);
-      }}
-    }} finally {{
-      saveBtn.disabled = false;
-      saveBtn.textContent = label;
-    }}
-  }}
-
-  saveBtn.addEventListener("click", saveImage);
   dots.forEach((d) => d.addEventListener("click", () => goTo(+d.dataset.index)));
 
   const viewport = document.getElementById("viewport");

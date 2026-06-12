@@ -26,7 +26,7 @@ Then, inside any session:
 Claude runs the generator for the current session and prints a scannable QR
 code in the terminal. Scan it with your phone (same Wi-Fi network) to open
 a carousel share page — story card by default, swipe left for the footer
-strip, tap Save image to add to your camera roll. A temporary local server makes them available
+strip, then press and hold an image to save it. A temporary local server makes them available
 for 5 minutes, no upload involved. Nothing is opened automatically in the browser.
 
 **`/overlay` uses zero model tokens.** A `UserPromptSubmit` hook intercepts
@@ -80,7 +80,7 @@ python3 overlay.py --qr             # QR in terminal (no browser open)
 
 `--qr` exports the PNGs, starts a temporary local server (5 minutes, LAN
 only), and prints a QR code linking to a mobile carousel — swipe between
-story and footer, tap Save image to add to your camera roll. Pass `--share-url <url>` to encode
+story and footer, then press and hold an image to save it. Pass `--share-url <url>` to encode
 a custom link instead.
 
 ## Export share images
