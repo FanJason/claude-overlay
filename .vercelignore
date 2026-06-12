@@ -1,0 +1,8 @@
+# Only the static landing page deploys to Vercel; the plugin ships via GitHub.
+*.py
+requirements.txt
+commands/
+.claude-plugin/
+out/
+__pycache__/
+README.md
