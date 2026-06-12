@@ -395,9 +395,9 @@ HEAD = f"""<meta charset="utf-8">
      a soft offset shadow for depth + a tight contact shadow for edge
      definition. Harmless on the dark preview page, essential on export. */
   .value, .label, .wordmark {{
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28), 0 0 1px rgba(0, 0, 0, 0.30);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), 0 0 1px rgba(0, 0, 0, 0.20);
   }}
-  .story svg, .strip-top svg {{ filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.28)); }}
+  .story svg, .strip-top svg {{ filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.18)); }}
   .card {{
     background: var(--card); border: 1px solid var(--stroke); border-radius: 16px;
     display: flex; flex-direction: column; align-items: center;
