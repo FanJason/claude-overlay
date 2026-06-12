@@ -53,9 +53,10 @@ claude --plugin-dir /path/to/claude-overlay
 ### Share card when you exit (zero tokens)
 
 When a session ends (`/exit`, closing the terminal, etc.), a `SessionEnd`
-hook runs `overlay.py --export --qr` in that terminal — stats, Story path,
-and a scannable QR code print right there. Nothing opens in the browser.
-Sessions with no output are skipped silently.
+hook runs `overlay.py --export --qr` and prints stats, Story path, and a
+scannable QR to **stderr** (the only output visible in the terminal on
+exit). Nothing opens in the browser. If the ending session has no output
+yet, it falls back to your most recent session in the same project.
 
 ## Quick start (script, no plugin)
 
