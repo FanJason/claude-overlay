@@ -53,10 +53,15 @@ claude --plugin-dir /path/to/claude-overlay
 
 When a session ends (`/exit`, closing the terminal, etc.), a `SessionEnd`
 hook runs `overlay.py --qr` and prints stats, the Story path, and a scannable
-QR to **stderr** (the only output visible in the terminal on exit). The QR
-opens the story card only. Nothing opens in the browser. If the ending session
-has no output yet, it falls back to your most recent session in the same
-project.
+QR to your terminal. The QR opens the story card only. Nothing opens in the
+browser. If the ending session has no output yet, it falls back to your most
+recent session in the same project.
+
+**Troubleshooting:** Plugin `SessionEnd` hooks are limited to a ~1.5s budget by
+Claude Code, so this hook detaches the export and writes the QR directly to
+your terminal (`/dev/tty`) after exit. If you still see nothing, restart Claude
+Code after `/plugin update` (hooks reload on restart), then exit with `/exit`.
+Closing the terminal window can kill the hook before the QR finishes.
 
 ## Quick start (script, no plugin)
 
