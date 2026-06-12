@@ -23,11 +23,11 @@ Then, inside any session:
 /overlay
 ```
 
-Claude runs the generator for the current session, prints a scannable QR
-code right in the terminal, opens the story card, and lists the exported
-PNG paths. Scan the QR with your phone (same Wi-Fi network) to open the
-cards and save them to your camera roll — a temporary local server makes
-them available for 5 minutes, no upload involved.
+Claude runs the generator for the current session and prints a scannable QR
+code in the terminal. Scan it with your phone (same Wi-Fi network) to open
+the cards and save them to your camera roll — a temporary local server makes
+them available for 5 minutes, no upload involved. Nothing is opened
+automatically in the browser.
 
 **Rate limited?** `/overlay` needs a model turn, so it won't run when
 you've hit your session limit. Run the script directly instead (zero
@@ -63,8 +63,8 @@ Other invocations:
 ```bash
 python3 overlay.py --list           # list recent sessions
 python3 overlay.py --session <id>   # render a specific session
-python3 overlay.py --no-open        # write the file, don't open it
-python3 overlay.py --qr             # QR that opens the cards on your phone
+python3 overlay.py --no-open        # write HTML, don't open browser
+python3 overlay.py --qr             # QR in terminal (no browser open)
 ```
 
 `--qr` exports the PNGs, starts a temporary local server (5 minutes, LAN

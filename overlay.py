@@ -721,7 +721,7 @@ def main() -> int:
         else:
             print("QR skipped — PNG export failed.", file=sys.stderr)
 
-    if not args.no_open:
+    if not args.no_open and not args.qr:
         webbrowser.open(out.as_uri())
     return 0
 
