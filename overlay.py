@@ -444,7 +444,7 @@ def card_html(stats: dict, variant: str) -> str:
         return (
             '<div class="card story">'
             f'<div class="stats-col story-stats">{stats_html}</div>'
-            f"{route_svg(stats['route'], 190, 78, 2.5)}"
+            f"{route_svg(stats['route'], 190, 78, 3.5)}"
             '<div class="wordmark">Claude</div></div>'
         )
     return (
