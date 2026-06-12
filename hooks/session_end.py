@@ -1,14 +1,35 @@
 #!/usr/bin/env python3
-"""SessionEnd hook — print story share QR in the terminal when a session ends."""
+"""SessionEnd hook — print the story share QR in the terminal when a session ends.
+
+Claude Code gives plugin SessionEnd hooks a short budget (~1.5s) and then kills
+the hook's process group, so the export (Chrome render + QR) must run in a
+detached worker. The worker must NOT call setsid(): a process in a new session
+cannot open /dev/tty, and on macOS even an inherited pty fd returns EIO when
+written from a foreign session. Instead, this hook opens /dev/tty itself
+(while it still has the controlling terminal), hands that fd to the worker as
+stdout/stderr, and detaches with setpgrp() only — a new process group escapes
+the group kill but stays in the terminal's session, so writes still land.
+"""
 
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import subprocess
 import sys
 import textwrap
 from pathlib import Path
+
+LOG_PATH = Path.home() / ".claude/claude-overlay-session-end.log"
+
+
+def log(message: str) -> None:
+    try:
+        with LOG_PATH.open("a") as fh:
+            fh.write(f"{datetime.datetime.now().isoformat(timespec='seconds')} {message}\n")
+    except OSError:
+        pass
 
 
 def plugin_root() -> Path:
@@ -31,24 +52,19 @@ def build_overlay_cmd(payload: dict) -> list[str]:
     return cmd
 
 
-def spawn_detached_export(cmd: list[str]) -> bool:
-    """Run overlay export detached so it survives SessionEnd's 1.5s plugin budget.
-
-    Plugin-provided SessionEnd hooks do not raise Claude Code's session-end timeout
-    budget, so synchronous export (Chrome + QR) is usually killed mid-run. We
-    re-exec a tiny worker that writes directly to /dev/tty and return immediately.
-    """
-    worker = textwrap.dedent(
+def worker_source(cmd: list[str]) -> str:
+    return textwrap.dedent(
         f"""
         import subprocess
         import sys
 
-        try:
-            tty = open("/dev/tty", "w")
-        except OSError:
-            tty = sys.stderr
+        def log(message):
+            try:
+                with open({str(LOG_PATH)!r}, "a") as fh:
+                    fh.write("worker: " + message + "\\n")
+            except OSError:
+                pass
 
-        print("\\nclaude-overlay — share your session\\n", file=tty, flush=True)
         try:
             result = subprocess.run(
                 {cmd!r},
@@ -56,70 +72,84 @@ def spawn_detached_export(cmd: list[str]) -> bool:
                 text=True,
                 check=False,
             )
-        except Exception:
-            print(
-                "claude-overlay: could not generate a share card for this session.",
-                file=tty,
-                flush=True,
-            )
+            output = (result.stdout + result.stderr).strip()
+        except Exception as exc:
+            log("overlay export raised " + repr(exc))
             raise SystemExit(0)
 
-        output = (result.stdout + result.stderr).strip()
-        if output:
-            print(output, file=tty, flush=True)
-        else:
-            print(
-                "claude-overlay: could not generate a share card for this session.",
-                file=tty,
-                flush=True,
-            )
+        if not output:
+            log("overlay export produced no output (empty session?)")
+            raise SystemExit(0)
+
+        try:
+            print("\\nclaude-overlay — share your session\\n", flush=True)
+            print(output, flush=True)
+            log("share card printed to terminal")
+        except OSError as exc:
+            log("terminal write failed: " + repr(exc))
         """
     ).strip()
 
+
+def spawn_detached_export(cmd: list[str]) -> bool:
     try:
-        subprocess.Popen(
-            [sys.executable, "-c", worker],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-            close_fds=True,
-        )
-    except OSError:
+        tty_fd = os.open("/dev/tty", os.O_WRONLY)
+    except OSError as exc:
+        log(f"no /dev/tty ({exc}); falling back to inline run")
         return False
+
+    detach: dict = (
+        {"process_group": 0}
+        if sys.version_info >= (3, 11)
+        else {"preexec_fn": os.setpgrp}
+    )
+    try:
+        proc = subprocess.Popen(
+            [sys.executable, "-c", worker_source(cmd)],
+            stdin=subprocess.DEVNULL,
+            stdout=tty_fd,
+            stderr=tty_fd,
+            close_fds=True,
+            **detach,
+        )
+    except OSError as exc:
+        log(f"failed to spawn worker: {exc!r}")
+        return False
+    finally:
+        os.close(tty_fd)
+
+    log(f"spawned detached worker pid={proc.pid}")
     return True
 
 
-def main() -> int:
-    try:
-        payload = json.load(sys.stdin)
-    except (json.JSONDecodeError, OSError, ValueError):
-        payload = {}
-
-    cmd = build_overlay_cmd(payload)
-
-    # Visible immediately — SessionEnd only shows stderr and may kill us quickly.
-    print("claude-overlay: generating share card…", file=sys.stderr, flush=True)
-
-    if spawn_detached_export(cmd):
-        return 0
-
-    # Fallback when /dev/tty detach fails (non-interactive): try inline, best effort.
+def run_inline(cmd: list[str]) -> None:
+    """Best-effort fallback when there is no terminal (non-interactive)."""
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-    except Exception:
-        return 0
+    except Exception as exc:
+        log(f"inline export raised {exc!r}")
+        return
 
     output = (result.stdout + result.stderr).strip()
-    if not output:
-        print(
-            "claude-overlay: could not generate a share card for this session.",
-            file=sys.stderr,
-        )
-        return 0
+    if output:
+        print("\nclaude-overlay — share your session\n", file=sys.stderr)
+        print(output, file=sys.stderr, flush=True)
+    else:
+        log("inline export produced no output")
 
-    print("\nclaude-overlay — share your session\n", file=sys.stderr)
-    print(output, file=sys.stderr, flush=True)
+
+def main() -> int:
+    raw = sys.stdin.read()
+    try:
+        payload = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        payload = {}
+
+    log(f"=== SessionEnd hook invoked === payload={raw.strip() or '(empty)'}")
+
+    cmd = build_overlay_cmd(payload)
+    if not spawn_detached_export(cmd):
+        run_inline(cmd)
     return 0
 
 

@@ -6,20 +6,25 @@
   },
   "metadata": {
     "description": "Share cards for Claude Code sessions",
-    "version": "0.6.1"
+    "version": "0.6.2"
   },
   "plugins": [
     {
       "name": "claude-overlay",
       "source": "./",
-      "description": "Share your Claude Code sessions — /overlay renders a story card + footer strip with your session's route line, lines added, thinking time, and output tokens.",
-      "version": "0.6.1",
+      "description": "Share your Claude Code sessions \u2014 /overlay renders a story card + footer strip with your session's route line, lines added, thinking time, and output tokens.",
+      "version": "0.6.2",
       "author": {
         "name": "Jason Fan"
       },
       "homepage": "https://claude-overlay.vercel.app",
       "repository": "https://github.com/FanJason/claude-overlay",
-      "keywords": ["share", "stats", "overlay", "session"]
+      "keywords": [
+        "share",
+        "stats",
+        "overlay",
+        "session"
+      ]
     }
   ]
 }

@@ -50,7 +50,7 @@ SESSION_END_PAYLOAD="$(jq -n \
   '{session_id: $sid, transcript_path: $tp, hook_event_name: "SessionEnd", reason: "other"}')"
 
 run_hook "UserPromptSubmit (/overlay)" "$ROOT/hooks/prompt_submit.py" "$OVERLAY_PAYLOAD"
-run_hook "SessionEnd (shell wrapper)" "$ROOT/hooks/run_session_end.sh" "$SESSION_END_PAYLOAD"
+run_hook "SessionEnd" "$ROOT/hooks/session_end.py" "$SESSION_END_PAYLOAD"
 
 if [[ -f "$LOG" ]]; then
   echo "--- SessionEnd log (last 20 lines) ---"
