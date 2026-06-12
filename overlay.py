@@ -28,6 +28,7 @@ SNAPSHOT_DIR = Path.home() / ".claude-overlay" / "sessions"
 OUT_DIR = Path(__file__).parent / "out"
 
 ACCENT = "#D97757"  # Claude terracotta
+ACCENT_LINE = "#EA9A76"  # slightly brighter for the route line
 
 
 # --------------------------------------------------------------------------
@@ -282,7 +283,7 @@ def route_svg(route, w: int, h: int, stroke: float) -> str:
     pts = route_points(route, w, h, stroke * 2.5)
     return (
         f'<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}">'
-        f'<path d="{smooth_path(pts)}" fill="none" stroke="{ACCENT}" '
+        f'<path d="{smooth_path(pts)}" fill="none" stroke="{ACCENT_LINE}" '
         f'stroke-width="{stroke}" stroke-linecap="round" stroke-linejoin="round"/>'
         "</svg>"
     )
@@ -292,11 +293,11 @@ def route_svg(route, w: int, h: int, stroke: float) -> str:
 # HTML rendering
 # --------------------------------------------------------------------------
 
-def stat(value: str, label: str) -> str:
-    return (
-        '<div class="stat"><div class="value">'
-        f"{value}</div><div class=\"label\">{label}</div></div>"
-    )
+def stat(value: str, label: str, *, label_first: bool = False) -> str:
+    value_html = f'<div class="value">{value}</div>'
+    label_html = f'<div class="label">{label}</div>'
+    inner = (label_html + value_html) if label_first else (value_html + label_html)
+    return f'<div class="stat">{inner}</div>'
 
 
 HEAD = f"""<meta charset="utf-8">
@@ -310,7 +311,12 @@ HEAD = f"""<meta charset="utf-8">
     background: var(--card); border: 1px solid var(--stroke); border-radius: 16px;
     display: flex; flex-direction: column; align-items: center;
   }}
-  .story {{ width: 340px; padding: 32px 28px 36px; gap: 28px; }}
+  .story {{ width: 340px; padding: 32px 28px 36px; gap: 24px; }}
+  .story-stats {{ display: flex; gap: 28px; justify-content: center; width: 100%; }}
+  .story .stat {{ align-items: center; gap: 4px; }}
+  .story .label {{ font-size: 8px; color: var(--fg-dim); }}
+  .story .value {{ font-size: 24px; }}
+  .story .wordmark {{ margin-top: 4px; }}
   .strip {{ width: 620px; flex-direction: row; align-items: center; gap: 20px; padding: 14px 22px; border-radius: 12px; }}
   .strip svg {{ flex-shrink: 0; margin-left: 12px; margin-right: 10px; }}
   .strip .value {{ font-size: 17px; }}
@@ -323,7 +329,6 @@ HEAD = f"""<meta charset="utf-8">
   .stats-col {{ display: flex; flex-direction: column; gap: 20px; align-items: center; }}
   .stats-row {{ display: flex; gap: 28px; margin-left: auto; }}
   .stat {{ display: flex; flex-direction: column; gap: 2px; white-space: nowrap; }}
-  .story .stat {{ align-items: center; }}
   .value {{ font-size: 24px; font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }}
   .label {{ font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg); }}
 </style>"""
@@ -334,15 +339,16 @@ def card_html(stats: dict, variant: str) -> str:
     thinking = fmt_duration(stats["api_ms"])
     tokens = fmt_tokens(stats["output_tokens"])
     stats_html = (
-        stat(lines, "Lines added")
-        + stat(thinking, "Thinking time")
-        + stat(tokens, "Output tokens")
+        stat(lines, "Lines added", label_first=(variant == "story"))
+        + stat(thinking, "Thinking time", label_first=(variant == "story"))
+        + stat(tokens, "Output tokens", label_first=(variant == "story"))
     )
     if variant == "story":
         return (
-            '<div class="card story"><div class="wordmark">Claude</div>'
+            '<div class="card story">'
+            f'<div class="stats-row story-stats">{stats_html}</div>'
             f"{route_svg(stats['route'], 230, 120, 3)}"
-            f'<div class="stats-col">{stats_html}</div></div>'
+            '<div class="wordmark">Claude</div></div>'
         )
     return (
         '<div class="card strip">'
@@ -686,6 +692,11 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--session", help="session id (transcript filename stem)")
     ap.add_argument(
+        "--no-fallback",
+        action="store_true",
+        help="use the exact session only (no sibling fallback)",
+    )
+    ap.add_argument(
         "--transcript-path",
         help="exact transcript JSONL path (from Claude Code hook payload)",
     )
@@ -710,6 +721,7 @@ def main() -> int:
         action="store_true",
         help="check session usage limit and print fallback command if hit",
     )
+    ap.add_argument("--quiet-if-empty", action="store_true", help=argparse.SUPPRESS)
     args = ap.parse_args()
 
     if args.serve:
@@ -741,13 +753,16 @@ def main() -> int:
             transcripts,
             session_id=None,
             transcript_path=args.transcript_path,
-            allow_fallback=True,
+            allow_fallback=not args.no_fallback,
         )
         if not path:
             print("No Claude transcripts found in ~/.claude/projects", file=sys.stderr)
             return 1
 
     stats = apply_snapshot(parse_transcript(path))
+
+    if args.quiet_if_empty and session_is_empty(stats):
+        return 0
 
     if fallback_from:
         print(

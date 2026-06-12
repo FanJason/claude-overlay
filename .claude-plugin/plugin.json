@@ -1,7 +1,7 @@
 {
   "name": "claude-overlay",
   "description": "Share your Claude Code sessions — /overlay renders a story card + footer strip with your session's route line, lines added, thinking time, and output tokens.",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "author": {
     "name": "Jason Fan"
   }
