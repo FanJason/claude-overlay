@@ -9,6 +9,14 @@ written from a foreign session. Instead, this hook opens /dev/tty itself
 (while it still has the controlling terminal), hands that fd to the worker as
 stdout/stderr, and detaches with setpgrp() only — a new process group escapes
 the group kill but stays in the terminal's session, so writes still land.
+
+Claude Code additionally spawns hooks with no controlling terminal at all, so
+/dev/tty (a kernel alias that re-resolves the *calling process's* controlling
+terminal on every operation) usually fails even here. We then resolve the
+concrete device (/dev/ttysNNN) of the nearest ancestor that has a tty — the
+Claude Code process itself — and open it directly with O_NOCTTY. A concrete
+device fd keeps working from any session (this is how wall(1) writes to other
+terminals).
 """
 
 from __future__ import annotations
@@ -91,11 +99,57 @@ def worker_source(cmd: list[str]) -> str:
     ).strip()
 
 
-def spawn_detached_export(cmd: list[str]) -> bool:
+def ancestor_tty(pid: int) -> str:
     try:
-        tty_fd = os.open("/dev/tty", os.O_WRONLY)
-    except OSError as exc:
-        log(f"no /dev/tty ({exc}); falling back to inline run")
+        return subprocess.run(
+            ["ps", "-o", "tty=", "-p", str(pid)],
+            capture_output=True, text=True, check=False,
+        ).stdout.strip()
+    except OSError:
+        return ""
+
+
+def ancestor_ppid(pid: int) -> int:
+    try:
+        out = subprocess.run(
+            ["ps", "-o", "ppid=", "-p", str(pid)],
+            capture_output=True, text=True, check=False,
+        ).stdout.strip()
+    except OSError:
+        return 0
+    return int(out) if out.isdigit() else 0
+
+
+def open_terminal() -> int | None:
+    """Open the user's terminal for writing; None if there isn't one."""
+    try:
+        return os.open("/dev/tty", os.O_WRONLY)
+    except OSError:
+        pass  # no controlling terminal — the normal case under Claude Code
+
+    pid = os.getppid()
+    for _ in range(10):
+        tty = ancestor_tty(pid)
+        if tty and tty not in ("??", "?", "-"):
+            dev = f"/dev/{tty}"
+            try:
+                fd = os.open(dev, os.O_WRONLY | os.O_NOCTTY)
+            except OSError as exc:
+                log(f"cannot open {dev}: {exc}")
+                return None
+            log(f"opened {dev} via ancestor pid {pid}")
+            return fd
+        pid = ancestor_ppid(pid)
+        if pid <= 1:
+            break
+    log("no terminal found on ancestor chain")
+    return None
+
+
+def spawn_detached_export(cmd: list[str]) -> bool:
+    tty_fd = open_terminal()
+    if tty_fd is None:
+        log("falling back to inline run")
         return False
 
     detach: dict = (
