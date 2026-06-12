@@ -347,13 +347,13 @@ def card_html(stats: dict, variant: str) -> str:
         return (
             '<div class="card story">'
             f'<div class="stats-col story-stats">{stats_html}</div>'
-            f"{route_svg(stats['route'], 230, 120, 3)}"
+            f"{route_svg(stats['route'], 190, 100, 2.5)}"
             '<div class="wordmark">Claude</div></div>'
         )
     return (
         '<div class="card strip">'
         '<div class="wordmark" style="margin-right:-8px">Claude</div>'
-        f"{route_svg(stats['route'], 130, 40, 2)}"
+        f"{route_svg(stats['route'], 110, 34, 1.5)}"
         f'<div class="stats-row">{stats_html}</div></div>'
     )
 
