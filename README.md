@@ -29,9 +29,12 @@ the cards and save them to your camera roll — a temporary local server makes
 them available for 5 minutes, no upload involved. Nothing is opened
 automatically in the browser.
 
-**Rate limited?** `/overlay` needs a model turn, so it won't run when
-you've hit your session limit. Run the script directly instead (zero
-tokens):
+**`/overlay` uses zero model tokens.** A `UserPromptSubmit` hook intercepts
+the command before it reaches Claude, runs `overlay.py` locally, prints the
+QR in your terminal, and skips the model turn — so it still works when
+you've hit your session usage limit.
+
+Fallback if the hook isn't loaded (run directly, also zero tokens):
 
 ```bash
 python3 overlay.py --export --qr

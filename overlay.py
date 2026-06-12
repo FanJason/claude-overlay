@@ -619,8 +619,8 @@ def print_rate_status() -> int:
     print(
         "LIMIT REACHED: session usage limit hit"
         f" ({', '.join(windows)}).{reset_line}\n"
-        "/overlay needs a model turn and will not work right now.\n\n"
-        "Run this instead (zero tokens):\n"
+        "/overlay should still work — a hook runs the generator locally.\n"
+        "If it doesn't, run this instead (zero tokens):\n"
         f"  {overlay_cli_command()}\n\n"
         "Or in Claude Code bash mode:\n"
         f"  !{overlay_cli_command()}"
