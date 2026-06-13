@@ -1127,22 +1127,25 @@ def main() -> int:
     out = OUT_DIR / f"overlay-{stats['session_id'][:8]}.html"
     out.write_text(render_html(stats))
 
-    if args.session:
-        print(f"Session:  {stats['session_id']}")
-        print(f"Project:  {stats['project']}")
-    else:
-        sess = stats["sessions"]
-        proj = stats["project_count"]
+    # The deferred (session-end) print is just the QR + share link — the card
+    # image already shows the stats, so the text header would only be noise.
+    if not args.qr_defer:
+        if args.session:
+            print(f"Session:  {stats['session_id']}")
+            print(f"Project:  {stats['project']}")
+        else:
+            sess = stats["sessions"]
+            proj = stats["project_count"]
+            print(
+                f"Day:      {stats['project']} · {sess} session{'s' if sess != 1 else ''}"
+                f" across {proj} project{'s' if proj != 1 else ''} (since 4am)"
+            )
         print(
-            f"Day:      {stats['project']} · {sess} session{'s' if sess != 1 else ''}"
-            f" across {proj} project{'s' if proj != 1 else ''} (since 4am)"
+            f"Stats:    +{stats['lines_added']}/-{stats['lines_removed']} lines · "
+            f"{fmt_tokens(stats['output_tokens'])} output tokens · "
+            f"thinking {fmt_duration(stats['api_ms'])} · "
+            f"elapsed {fmt_duration(stats['wall_ms'])}"
         )
-    print(
-        f"Stats:    +{stats['lines_added']}/-{stats['lines_removed']} lines · "
-        f"{fmt_tokens(stats['output_tokens'])} output tokens · "
-        f"thinking {fmt_duration(stats['api_ms'])} · "
-        f"elapsed {fmt_duration(stats['wall_ms'])}"
-    )
 
     sid8 = stats["session_id"][:8]
     want_qr = args.qr or args.qr_defer
