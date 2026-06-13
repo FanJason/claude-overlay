@@ -41,7 +41,8 @@ def day_start_ts(now: datetime | None = None) -> float:
     return start.timestamp()
 
 ACCENT = "#D97757"  # Claude terracotta
-ACCENT_LINE = "#FF8E5C"  # brighter, saturated terracotta for the route line
+ACCENT_LINE = "#FF631D"  # brighter, saturated terracotta for the route line
+ROUTE_LINE_ROTATION = -15  # degrees counter-clockwise
 
 
 # --------------------------------------------------------------------------
@@ -378,11 +379,26 @@ def smooth_path(pts) -> str:
 
 def route_svg(route, w: int, h: int, stroke: float) -> str:
     pts = route_points(route, w, h, stroke * 1.5)
+    path = smooth_path(pts)
+    cx, cy = w / 2, h / 2
+
+    # Expand the canvas so a rotated w×h path (plus round caps) is not clipped.
+    rad = math.radians(abs(ROUTE_LINE_ROTATION))
+    cos_a, sin_a = math.cos(rad), math.sin(rad)
+    rot_w = w * cos_a + h * sin_a
+    rot_h = w * sin_a + h * cos_a
+    pad_x = (rot_w - w) / 2 + stroke * 1.5
+    pad_y = (rot_h - h) / 2 + stroke * 1.5
+    vb_w = w + pad_x * 2
+    vb_h = h + pad_y * 2
+
     return (
-        f'<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}">'
-        f'<path d="{smooth_path(pts)}" fill="none" stroke="{ACCENT_LINE}" '
+        f'<svg width="{vb_w:.0f}" height="{vb_h:.0f}" viewBox="0 0 {vb_w:.1f} {vb_h:.1f}">'
+        f'<g transform="translate({pad_x:.1f} {pad_y:.1f}) '
+        f'rotate({ROUTE_LINE_ROTATION} {cx} {cy})">'
+        f'<path d="{path}" fill="none" stroke="{ACCENT_LINE}" '
         f'stroke-width="{stroke}" stroke-linecap="round" stroke-linejoin="round"/>'
-        "</svg>"
+        f"</g></svg>"
     )
 
 
@@ -399,7 +415,7 @@ def stat(value: str, label: str, *, label_first: bool = False) -> str:
 
 HEAD = f"""<meta charset="utf-8">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700&family=Open+Sans:wght@600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700&family=Open+Sans:wght@600;700;800&display=swap" rel="stylesheet">
 <style>
   :root {{ --accent: {ACCENT}; --fg: #FFFFFF; --fg-dim: #FFFFFF; --bg: #0F0E0D; --card: #171514; --stroke: #2A2724; }}
   * {{ margin: 0; box-sizing: border-box; }}
@@ -416,42 +432,42 @@ HEAD = f"""<meta charset="utf-8">
     display: flex; flex-direction: column; align-items: center;
   }}
   .story {{ width: 340px; padding: 32px 28px 36px; gap: 14px; }}
-  .story-stats {{ display: flex; flex-direction: column; gap: 20px; align-items: center; width: 100%; }}
+  .story-stats {{ display: flex; flex-direction: column; gap: 26px; align-items: center; width: 100%; }}
   .story .stat {{ align-items: center; gap: 7px; }}
   .story .label {{ font-size: 11px; letter-spacing: 0.06em; color: var(--fg); }}
-  .story .value {{ font-size: 40px; }}
+  .story .value {{ font-size: 36px; }}
   .story .wordmark {{ font-size: 32px; }}
   .strip {{ width: 620px; flex-direction: column; align-items: stretch; gap: 8px; padding: 16px 24px 14px; border-radius: 12px; }}
   .strip-top {{ display: flex; align-items: center; gap: 20px; width: 100%; }}
   .strip-top .wordmark {{ flex-shrink: 0; font-size: 32px; }}
-  .strip-top .route-wrap {{ flex: 1; display: flex; justify-content: center; min-width: 0; }}
+  .strip-top .route-wrap {{ flex: 1; display: flex; justify-content: center; min-width: 0; padding: 0; }}
   .story svg, .strip-top svg {{ display: block; }}
-  .story svg {{ margin: 14px 0; }}
+  .story svg {{ margin: 4px 0; }}
   .strip .stats-row {{ justify-content: center; margin-left: 0; width: 100%; }}
   .strip .stat {{ gap: 1px; }}
-  .strip .value {{ font-size: 32px; }}
+  .strip .value {{ font-size: 28px; }}
   .strip .label {{ font-size: 14px; }}
   .wordmark {{
     font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
     font-size: 20px; font-weight: 700; letter-spacing: 0.06em;
     text-transform: uppercase;
   }}
-  .stats-col {{ display: flex; flex-direction: column; gap: 20px; align-items: center; }}
-  .stats-row {{ display: flex; gap: 28px; margin-left: auto; }}
+  .stats-col {{ display: flex; flex-direction: column; gap: 26px; align-items: center; }}
+  .stats-row {{ display: flex; gap: 36px; margin-left: auto; }}
   .stat {{ display: flex; flex-direction: column; gap: 0; white-space: nowrap; }}
-  .value {{ font-size: 24px; font-weight: 700; line-height: 1; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }}
-  .label {{ font-size: 10px; font-weight: 600; line-height: 1; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg); }}
+  .value {{ font-size: 22px; font-weight: 700; line-height: 1; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; text-align: center; }}
+  .label {{ font-size: 16px; font-weight: 700; line-height: 1; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg); }}
 </style>"""
 
 
 def card_html(stats: dict, variant: str) -> str:
-    lines = f"+{stats['lines_added']:,}-{stats['lines_removed']:,}"
+    lines = f"{stats['lines_added'] + stats['lines_removed']:,}"
     thinking = fmt_thinking(stats["api_ms"])
     tokens = fmt_tokens(stats["output_tokens"])
     stats_html = (
-        stat(lines, "Lines changed", label_first=(variant == "story"))
-        + stat(tokens, "Output tokens", label_first=(variant == "story"))
-        + stat(thinking, "Thinking time", label_first=(variant == "story"))
+        stat(tokens, "Output Tokens", label_first=(variant == "story"))
+        + stat(lines, "Lines Changed", label_first=(variant == "story"))
+        + stat(thinking, "Thinking Time", label_first=(variant == "story"))
     )
     if variant == "story":
         return (
