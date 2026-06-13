@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
 """SessionEnd hook — print the story share QR in the terminal when a session ends.
 
-Claude Code gives plugin SessionEnd hooks a short budget (~1.5s) and then kills
-the hook's process group, so the export (Chrome render + QR) must run in a
-detached worker. The worker must NOT call setsid(): a process in a new session
-cannot open /dev/tty, and on macOS even an inherited pty fd returns EIO when
-written from a foreign session. Instead, this hook opens /dev/tty itself
-(while it still has the controlling terminal), hands that fd to the worker as
-stdout/stderr, and detaches with setpgrp() only — a new process group escapes
-the group kill but stays in the terminal's session, so writes still land.
+The QR must be written *synchronously, before this hook returns*. If we instead
+detach a worker that writes a moment later (as an earlier version did), the card
+lands after the shell has already drawn its prompt, leaving the cursor on a
+blank line with no prompt under it — the user has to press Enter to get one back.
+Writing before the hook returns means Claude Code is still in control of the
+terminal and the shell draws its prompt cleanly *after* our output.
 
-Claude Code additionally spawns hooks with no controlling terminal at all, so
-/dev/tty (a kernel alias that re-resolves the *calling process's* controlling
-terminal on every operation) usually fails even here. We then resolve the
-concrete device (/dev/ttysNNN) of the nearest ancestor that has a tty — the
-Claude Code process itself — and open it directly with O_NOCTTY. A concrete
-device fd keeps working from any session (this is how wall(1) writes to other
-terminals).
+Synchronous printing is only safe because the slow part — the ~1.5s Chrome PNG
+render — has been handed off to the share server (overlay.py --qr-defer): the
+server process renders the card in the background while serving the page, so all
+this hook does is compute stats and print the QR (~0.2s), comfortably inside the
+hook budget.
+
+Claude Code spawns hooks with no controlling terminal, so plain stdout doesn't
+reach the user's screen and /dev/tty (a kernel alias that re-resolves the
+*calling process's* controlling terminal) usually fails. We resolve the concrete
+device (/dev/ttysNNN) of the nearest ancestor that has a tty — the Claude Code
+process itself — and open it directly with O_NOCTTY. A concrete device fd writes
+from any session (this is how wall(1) writes to other terminals).
 """
 
 from __future__ import annotations
@@ -26,7 +29,6 @@ import json
 import os
 import subprocess
 import sys
-import textwrap
 from pathlib import Path
 
 LOG_PATH = Path.home() / ".claude/claude-overlay-session-end.log"
@@ -51,64 +53,9 @@ def build_overlay_cmd(payload: dict) -> list[str]:
     # The card aggregates every session in the current 4am-to-4am day, so the
     # specific session that just ended doesn't need to be passed — the default
     # (no --session) is the daily view, and it quietly no-ops on an empty day.
+    # --qr-defer hands the Chrome render to the share server so this returns fast.
     overlay = plugin_root() / "overlay.py"
-    return [sys.executable, str(overlay), "--qr", "--quiet-if-empty"]
-
-
-def worker_source(cmd: list[str]) -> str:
-    return textwrap.dedent(
-        f"""
-        import os
-        import signal
-        import subprocess
-        import sys
-
-        def log(message):
-            try:
-                with open({str(LOG_PATH)!r}, "a") as fh:
-                    fh.write("worker: " + message + "\\n")
-            except OSError:
-                pass
-
-        try:
-            result = subprocess.run(
-                {cmd!r},
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            output = (result.stdout + result.stderr).strip()
-        except Exception as exc:
-            log("overlay export raised " + repr(exc))
-            raise SystemExit(0)
-
-        if not output:
-            log("overlay export produced no output (empty session?)")
-            raise SystemExit(0)
-
-        try:
-            print("\\nclaude-overlay — share your session\\n", flush=True)
-            print(output, flush=True)
-            log("share card printed to terminal")
-        except OSError as exc:
-            log("terminal write failed: " + repr(exc))
-
-        # We wrote seconds after the session ended, so the shell has already
-        # drawn its prompt above our output, leaving the cursor on a blank line
-        # with no prompt under it (the user otherwise has to press Enter to get
-        # one back). Nudge the terminal's foreground process group — the shell,
-        # since Claude has exited — with SIGWINCH so it repaints its prompt in
-        # place. TIOCSTI (inject a newline) is the alternative but macOS blocks
-        # it from a foreign session.
-        try:
-            pgrp = os.tcgetpgrp(1)  # stdout is the user's terminal
-            if pgrp > 0:
-                os.killpg(pgrp, signal.SIGWINCH)
-                log("sent SIGWINCH to foreground pgrp " + str(pgrp))
-        except OSError as exc:
-            log("prompt repaint nudge failed: " + repr(exc))
-        """
-    ).strip()
+    return [sys.executable, str(overlay), "--qr-defer", "--quiet-if-empty"]
 
 
 def ancestor_tty(pid: int) -> str:
@@ -158,33 +105,31 @@ def open_terminal() -> int | None:
     return None
 
 
-def spawn_detached_export(cmd: list[str]) -> bool:
+def print_to_terminal(cmd: list[str]) -> bool:
+    """Render the card and write it to the terminal, synchronously.
+
+    Returns False (so the caller can fall back to inline stderr) when there is
+    no terminal to write to. The overlay command is fast here because the Chrome
+    render is deferred to the share server (see module docstring).
+    """
     tty_fd = open_terminal()
     if tty_fd is None:
-        log("falling back to inline run")
+        log("no terminal — falling back to inline run")
         return False
 
-    detach: dict = (
-        {"process_group": 0}
-        if sys.version_info >= (3, 11)
-        else {"preexec_fn": os.setpgrp}
-    )
     try:
-        proc = subprocess.Popen(
-            [sys.executable, "-c", worker_source(cmd)],
-            stdin=subprocess.DEVNULL,
-            stdout=tty_fd,
-            stderr=tty_fd,
-            close_fds=True,
-            **detach,
-        )
-    except OSError as exc:
-        log(f"failed to spawn worker: {exc!r}")
-        return False
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        output = (result.stdout + result.stderr).strip()
+        if not output:
+            log("overlay produced no output (empty session?)")
+            return True  # terminal exists; nothing to show is not a failure
+        banner = "\nclaude-overlay — share your session\n\n"
+        os.write(tty_fd, (banner + output + "\n").encode("utf-8", "replace"))
+        log("share card written to terminal synchronously")
+    except Exception as exc:
+        log(f"synchronous terminal write failed: {exc!r}")
     finally:
         os.close(tty_fd)
-
-    log(f"spawned detached worker pid={proc.pid}")
     return True
 
 
@@ -214,7 +159,7 @@ def main() -> int:
     log(f"=== SessionEnd hook invoked === payload={raw.strip() or '(empty)'}")
 
     cmd = build_overlay_cmd(payload)
-    if not spawn_detached_export(cmd):
+    if not print_to_terminal(cmd):
         run_inline(cmd)
     return 0
 

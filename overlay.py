@@ -827,11 +827,31 @@ def share_page_html(sid8: str, variants: list[str]) -> str:
 
 def run_share_server(
     sid8: str, port: int, variants: list[str] | None = None,
+    stats_path: str | None = None,
 ) -> int:
     """Internal mode: serve the share page + PNGs from OUT_DIR, then exit."""
     import http.server
     import os
     import threading
+    import time
+
+    # When the caller defers the PNG render to us (so the terminal QR can print
+    # instantly at session end), the .png files don't exist yet. Render them
+    # here, in this detached, long-lived process, and let the request handler
+    # wait for them — the phone scan is always several seconds behind the print.
+    if stats_path:
+        try:
+            with open(stats_path) as fh:
+                deferred_stats = json.load(fh)
+        except (OSError, ValueError):
+            deferred_stats = None
+        if deferred_stats is not None:
+            threading.Thread(
+                target=export_pngs,
+                args=(deferred_stats,),
+                kwargs={"variants": list(variants) if variants else ["story"]},
+                daemon=True,
+            ).start()
 
     if variants is None:
         variants = [
@@ -853,6 +873,10 @@ def run_share_server(
                 self.wfile.write(page)
             elif self.path.endswith(".png"):
                 file_path = OUT_DIR / Path(self.path.lstrip("/")).name
+                # A deferred render may still be in flight; give it a moment.
+                deadline = time.monotonic() + 15
+                while not file_path.is_file() and time.monotonic() < deadline:
+                    time.sleep(0.2)
                 if file_path.is_file():
                     data = file_path.read_bytes()
                     self.send_response(200)
@@ -876,8 +900,14 @@ def run_share_server(
 
 def start_share_server(
     sid8: str, variants: list[str] | None = None,
+    stats: dict | None = None,
 ) -> str | None:
-    """Spawn a detached copy of this script in serve mode; return the URL."""
+    """Spawn a detached copy of this script in serve mode; return the URL.
+
+    When ``stats`` is given, the PNG render is handed to the server process so
+    the caller can return immediately (used at session end to print the QR
+    without waiting on a ~1.5s Chrome render).
+    """
     import socket
     import subprocess
 
@@ -891,6 +921,10 @@ def start_share_server(
     ]
     if variants:
         cmd.extend(["--serve-variants", ",".join(variants)])
+    if stats is not None:
+        stats_path = OUT_DIR / f"overlay-{sid8}-stats.json"
+        stats_path.write_text(json.dumps(stats))
+        cmd.extend(["--serve-stats", str(stats_path)])
     subprocess.Popen(
         cmd,
         stdout=subprocess.DEVNULL,
@@ -921,7 +955,7 @@ def print_qr(url: str) -> None:
     qr.make(fit=True)
     print()
     qr.print_ascii(invert=True)
-    print(f"  Scan to view & share: {url}\n")
+    print(f"Scan to view & share: {url}")
 
 
 # --------------------------------------------------------------------------
@@ -1026,12 +1060,19 @@ def main() -> int:
         help="print a QR code that opens the card on your phone (same Wi-Fi)",
     )
     ap.add_argument(
+        "--qr-defer",
+        action="store_true",
+        help=argparse.SUPPRESS,  # like --qr, but hands the PNG render to the
+                                 # share server so the QR prints instantly
+    )
+    ap.add_argument(
         "--share-url",
         help="custom URL to encode in the QR (skips the local share server)",
     )
     ap.add_argument("--serve", help=argparse.SUPPRESS)
     ap.add_argument("--serve-port", type=int, help=argparse.SUPPRESS)
     ap.add_argument("--serve-variants", help=argparse.SUPPRESS)
+    ap.add_argument("--serve-stats", help=argparse.SUPPRESS)
     ap.add_argument(
         "--rate-status",
         action="store_true",
@@ -1046,7 +1087,10 @@ def main() -> int:
             serve_variants = [
                 v.strip() for v in args.serve_variants.split(",") if v.strip()
             ]
-        return run_share_server(args.serve, args.serve_port, serve_variants)
+        return run_share_server(
+            args.serve, args.serve_port, serve_variants,
+            stats_path=args.serve_stats,
+        )
 
     if args.rate_status:
         return print_rate_status()
@@ -1101,7 +1145,10 @@ def main() -> int:
     )
 
     sid8 = stats["session_id"][:8]
+    want_qr = args.qr or args.qr_defer
     exported = []
+    # --qr-defer hands the (slow) Chrome render to the share server, so we skip
+    # the foreground export here and let the QR print without waiting on it.
     if args.export or args.qr:
         export_variants = list(EXPORT_GEOMETRY) if args.export else ["story"]
         exported = export_pngs(stats, variants=export_variants)
@@ -1112,23 +1159,31 @@ def main() -> int:
             path = OUT_DIR / f"overlay-{sid8}-{variant}.png"
             if path in exported:
                 print(f"{label + ':':<8} {path}")
-    elif not args.no_open:
+    elif not args.no_open and not want_qr:
         print(f"Overlay:  {out}")
 
-    if args.qr:
+    if want_qr:
         if args.share_url:
             print_qr(args.share_url)
+        elif args.qr_defer:
+            url = start_share_server(sid8, variants=["story"], stats=stats)
+            if url:
+                print_qr(url)
+                print(
+                    f"Link serves your card on this Wi-Fi network for "
+                    f"{SHARE_TTL_SECS // 60} minutes."
+                )
         elif exported:
             url = start_share_server(sid8, variants=["story"])
             print_qr(url)
             print(
-                f"  Link serves your card on this Wi-Fi network for "
+                f"Link serves your card on this Wi-Fi network for "
                 f"{SHARE_TTL_SECS // 60} minutes."
             )
         else:
             print("QR skipped — PNG export failed.", file=sys.stderr)
 
-    if not args.no_open and not args.qr:
+    if not args.no_open and not want_qr:
         webbrowser.open(out.as_uri())
     return 0
 
