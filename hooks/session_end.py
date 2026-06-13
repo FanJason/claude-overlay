@@ -58,6 +58,8 @@ def build_overlay_cmd(payload: dict) -> list[str]:
 def worker_source(cmd: list[str]) -> str:
     return textwrap.dedent(
         f"""
+        import os
+        import signal
         import subprocess
         import sys
 
@@ -90,6 +92,21 @@ def worker_source(cmd: list[str]) -> str:
             log("share card printed to terminal")
         except OSError as exc:
             log("terminal write failed: " + repr(exc))
+
+        # We wrote seconds after the session ended, so the shell has already
+        # drawn its prompt above our output, leaving the cursor on a blank line
+        # with no prompt under it (the user otherwise has to press Enter to get
+        # one back). Nudge the terminal's foreground process group — the shell,
+        # since Claude has exited — with SIGWINCH so it repaints its prompt in
+        # place. TIOCSTI (inject a newline) is the alternative but macOS blocks
+        # it from a foreign session.
+        try:
+            pgrp = os.tcgetpgrp(1)  # stdout is the user's terminal
+            if pgrp > 0:
+                os.killpg(pgrp, signal.SIGWINCH)
+                log("sent SIGWINCH to foreground pgrp " + str(pgrp))
+        except OSError as exc:
+            log("prompt repaint nudge failed: " + repr(exc))
         """
     ).strip()
 
