@@ -39,3 +39,23 @@ dest = ROOT / "public" / "demo" / "story.png"
 src = out[0]
 dest.write_bytes(src.read_bytes())
 print(f"wrote {dest} from {src}")
+
+# Social share image (og:image): the transparent overlay PNG renders on a
+# white background in Messenger/WhatsApp/IG link previews, so bake the brand's
+# dark background in and pad to a square frame that those apps crop cleanly.
+from PIL import Image  # noqa: E402
+
+BG = (15, 14, 13, 255)          # #0F0E0D, the site/card background
+SIZE = 1200                      # square, safe across chat-app previews
+card = Image.open(dest).convert("RGBA")
+scale = min((SIZE * 0.82) / card.width, (SIZE * 0.82) / card.height)
+card = card.resize(
+    (round(card.width * scale), round(card.height * scale)), Image.LANCZOS
+)
+canvas = Image.new("RGBA", (SIZE, SIZE), BG)
+canvas.alpha_composite(
+    card, ((SIZE - card.width) // 2, (SIZE - card.height) // 2)
+)
+og = ROOT / "public" / "demo" / "og.png"
+canvas.convert("RGB").save(og, format="PNG", optimize=True)
+print(f"wrote {og} ({SIZE}x{SIZE}, solid background)")
