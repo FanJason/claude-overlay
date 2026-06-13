@@ -955,7 +955,7 @@ def print_qr(url: str) -> None:
     qr.make(fit=True)
     print()
     qr.print_ascii(invert=True)
-    print(f"Scan to view & share: {url}")
+    print(f"Scan to view your Claude stats: {url}")
 
 
 # --------------------------------------------------------------------------
